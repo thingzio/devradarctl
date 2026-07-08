@@ -1,0 +1,98 @@
+version: 2
+
+project_name: devradarctl
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: devradarctl
+    binary: devradarctl
+    dir: .
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w
+        -X main.version={{.Version}}
+        -X main.commit={{.ShortCommit}}
+        -X main.date={{.CommitDate}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: devradarctl
+    formats: [tar.gz]
+    name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "{{ .ProjectName }}_checksums.txt"
+  algorithm: sha256
+
+# Per-binary SBOMs of the released artifacts (requires syft on the release host).
+sboms:
+  - id: archive
+    artifacts: archive
+
+release:
+  github:
+    owner: thingzio
+    name: devradarctl
+  prerelease: auto
+  draft: true
+
+# Homebrew tap (cask). Guarded: skips upload on prereleases. Enable once the tap
+# repo (github.com/thingzio/homebrew-devradarctl) exists and a deploy token is set.
+homebrew_casks:
+  - name: devradarctl
+    repository:
+      owner: thingzio
+      name: homebrew-devradarctl
+    homepage: https://github.com/thingzio/devradarctl
+    description: CLI to generate and submit SBOMs to DevRadar
+    skip_upload: auto
+    caveats: |
+      devradarctl generates SBOMs with syft, which is not bundled.
+      Install it separately: brew install syft
+    # Binaries are not notarized; strip the macOS quarantine flag on install so
+    # Gatekeeper doesn't block the CLI.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/devradarctl"]
+          end
+
+report_sizes: true
+
+snapshot:
+  version_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - typo

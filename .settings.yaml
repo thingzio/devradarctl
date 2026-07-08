@@ -1,0 +1,29 @@
+# Single source of truth for tool versions and quality thresholds.
+# Consumed by the Makefile and CI workflows via yq.
+#
+# The Go toolchain version is owned by .go-version (read directly, not from
+# here) so `actions/setup-go` and `go install` share one source.
+
+# Build tools
+build_tools:
+  # renovate: datasource=github-releases depName=goreleaser/goreleaser
+  goreleaser: 'v2.17.0'
+
+# Linting
+linting:
+  # renovate: datasource=github-releases depName=golangci/golangci-lint
+  golangci_lint: 'v2.12.1'
+
+# SBOM generator. devradarctl shells out to syft at runtime; this is the
+# version CI installs so `sbom`/`submit --image` smoke tests can run, and the
+# version goreleaser uses to attach release SBOMs.
+security_tools:
+  # renovate: datasource=github-releases depName=anchore/syft
+  syft: 'v1.46.0'
+
+# Quality thresholds
+quality:
+  coverage_threshold: '35'
+  lint_timeout: '5m'
+  test_timeout: '10m'
+  build_timeout: '10m'

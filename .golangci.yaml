@@ -1,0 +1,40 @@
+version: "2"
+
+run:
+  go: "1.26"
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    # Bug detection
+    - bodyclose       # HTTP response body must be closed
+    - copyloopvar     # loop variable capture
+    - errorlint       # error wrapping / comparison
+    - nilerr          # returning nil after an error check
+    # Code quality
+    - gocritic        # opinionated checks
+    - govet
+    - misspell
+    - revive
+    - unconvert       # unnecessary conversions
+    - unparam         # unused function params
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: true  # doc comments are conventional, not enforced
+  exclusions:
+    generated: lax
+    rules:
+      # Tests may be longer / less strict.
+      - path: _test\.go
+        linters:
+          - gocritic
+          - unparam
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
