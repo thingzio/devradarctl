@@ -35,18 +35,33 @@ devradarctl sbom --image alpine:3.20 --output alpine.cdx.json
 ```
 
 The image is pinned to its manifest digest (`repo@sha256:…`) before syft runs, so
-the SBOM carries the digest DevRadar uses to identify the image unambiguously.
+the SBOM carries the digest DevRadar uses to identify the image unambiguously. The
+SBOM is generated with **all layers** in scope by default (see `--scope`).
 
 ### Submit an SBOM
 
-The API token is read from `DEVRADAR_TOKEN`, or piped via stdin.
+`submit` supports two modes. The API token is read from `DEVRADAR_TOKEN`, or
+piped via stdin.
+
+**Option 1 — from an image (recommended).** Point `devradarctl` at an image and
+it does everything in one step: resolves the manifest digest, generates an
+**all-layers** CycloneDX SBOM (the preferred form — it captures packages in
+every layer, not just the final squashed filesystem), and submits it.
 
 ```sh
-# From an existing SBOM file
-DEVRADAR_TOKEN=xxx devradarctl submit --file alpine.cdx.json --image-ref alpine@sha256:…
-
-# From an image (resolve digest, generate, submit — one step)
 echo "$DEVRADAR_TOKEN" | devradarctl submit --image alpine:3.20 --group team-x --group prod
+```
+
+This requires [`syft`](https://github.com/anchore/syft) on `PATH`.
+
+**Option 2 — from an existing SBOM file.** If your SBOM was already produced by
+another process (a CI pipeline, an image-build step, etc.), submit it as-is —
+no `syft` required. For the best inventory, generate that SBOM with all layers
+in scope (e.g. `syft --scope all-layers`). Pass `--image-ref` so the submission
+is pinned to the correct image digest.
+
+```sh
+DEVRADAR_TOKEN=xxx devradarctl submit --file alpine.cdx.json --image-ref alpine@sha256:…
 ```
 
 ## Configuration
