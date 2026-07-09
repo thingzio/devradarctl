@@ -16,8 +16,8 @@ import (
 
 // TestSubmit_ConformsToOpenAPI validates that the request Client.Submit builds,
 // and the response it accepts, conform to the DevRadar OpenAPI contract. The
-// spec in testdata is a verbatim copy of devradar's pkg/server/static/openapi.yaml
-// — refresh it when the API changes (see TestOpenAPISpec_IsCurrent).
+// spec in testdata is a copy of the service's published OpenAPI document —
+// refresh it when the API changes (see TestOpenAPISpec_IsCurrent).
 //
 // Scope: this catches wrong types, missing required fields, malformed values
 // (e.g. a bad digest), bad enums, and path/method/auth mistakes. It does NOT

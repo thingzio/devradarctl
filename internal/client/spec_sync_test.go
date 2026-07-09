@@ -27,8 +27,7 @@ var liveSpecURL = func() string {
 //
 // Network-dependent, so it is skipped under `go test -short` and when the
 // service is unreachable — the vendored copy still drives the offline contract
-// test. CI runs it (not short) to catch drift without needing the private
-// devradar repo checked out.
+// test. CI runs it (not short) to catch drift straight from the published spec.
 func TestOpenAPISpec_IsCurrent(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping network spec-sync check in -short mode")

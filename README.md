@@ -1,6 +1,6 @@
 # devradarctl
 
-CLI for the [DevRadar](https://github.com/thingzio/devradar) service. It hides the
+CLI for the [DevRadar](https://devradar.thingz.io) service. It hides the
 by-digest / all-layers / base64 mechanics of getting an SBOM into DevRadar behind
 two commands:
 

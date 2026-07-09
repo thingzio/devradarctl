@@ -2,7 +2,7 @@
 //
 // Default level is Warn (quiet by default, per CLI convention); --debug lifts
 // it to Debug. Output is a human-readable text handler on stderr unless JSON is
-// requested, in which case it matches the devradar server's JSON convention.
+// requested (--log-json), in which case a JSON handler is used.
 package logging
 
 import (
