@@ -4,10 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`devradarctl` — CLI for the [DevRadar](https://github.com/thingzio/devradar) service.
-Module `github.com/thingzio/devradarctl`. MIT-licensed (thinkz.io). Wraps the
-SBOM generate + submit workflow that previously lived in devradar's
-`tools/sbom-submit`.
+`devradarctl` — CLI for the DevRadar service (`https://devradar.thingz.io`).
+Module `github.com/thingzio/devradarctl`. MIT-licensed (thinkz.io). It wraps the
+SBOM generate + submit workflow behind two commands: `sbom` and `submit`.
 
 ## Commands
 
@@ -26,7 +25,7 @@ SBOM generate + submit workflow that previously lived in devradar's
 
 - `.go-version` — Go toolchain version (read by Makefile + all CI via `cat`).
 - `.settings.yaml` — pinned tool versions (goreleaser, golangci-lint, syft) and
-  quality thresholds, read via `yq`. Single source of truth shared by the Makefile and workflows; carries `# renovate:` annotations. Mirrors the devradar convention.
+  quality thresholds, read via `yq`. Single source of truth shared by the Makefile and workflows; carries `# renovate:` annotations.
 
 ## CI / release
 
@@ -51,7 +50,7 @@ Thin `main.go` → `internal/cli`. Nothing is meant for external import, hence
   - `submit.go` — `submit` command; `resolveToken` (env `DEVRADAR_TOKEN` → piped stdin), file vs image mode (mutually exclusive).
   - `flags.go` — shared flag constants and `syftFlags()`.
 - `internal/sbom` — SBOM domain logic.
-  - `ref.go` — `SplitRef`/`Repository`/`Tag` (ported from devradar `pkg/sbom/ref.go`).
+  - `ref.go` — `SplitRef`/`Repository`/`Tag` image-reference parsing.
   - `digest.go` — manifest digest resolution **in-process** via `go-containerregistry` (crane lib); no `crane` binary needed.
   - `generate.go` — shells out to `syft` (`-q --scope all-layers -o cyclonedx-json <ref>`); `EnsureSyft` fails fast if absent.
 - `internal/client` — HTTP client for `POST /v1/sboms` (Bearer auth, base64 `sbom`, optional `image_ref`/`version`/`labels`).
@@ -59,8 +58,8 @@ Thin `main.go` → `internal/cli`. Nothing is meant for external import, hence
 
 ## Key conventions
 
-- **Logging default is warn** (quiet CLI), unlike the devradar server (info). `--debug` lifts to debug.
-- Env vars use the `DEVRADAR_*` prefix (matches the devradar server), not the old `DR_*` from `tools/sbom-submit`.
+- **Logging default is warn** (quiet CLI). `--debug` lifts to debug.
+- Env vars use the `DEVRADAR_*` prefix.
 - SBOMs are generated against a **digest-pinned** reference so the document carries the manifest digest DevRadar keys on.
 
 ## API contract
