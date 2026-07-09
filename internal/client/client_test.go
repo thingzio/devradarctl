@@ -22,8 +22,8 @@ func TestSubmit_Success(t *testing.T) {
 		gotPath = r.URL.Path
 		raw, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(raw, &gotBody)
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(SubmitResponse{SBOMID: "sb-1", Format: "cyclonedx-json", ImageRef: "alpine@sha256:x"})
+		w.WriteHeader(http.StatusAccepted) // 202, per the OpenAPI spec
+		_ = json.NewEncoder(w).Encode(SubmitResponse{SBOMID: "sb-1", Format: "cyclonedx", ImageRef: "alpine@sha256:x"})
 	}))
 	defer srv.Close()
 
@@ -57,7 +57,7 @@ func TestSubmit_Success(t *testing.T) {
 	if len(gotBody.Labels) != 2 {
 		t.Errorf("body.labels = %v, want 2 labels", gotBody.Labels)
 	}
-	if resp.SBOMID != "sb-1" || resp.Format != "cyclonedx-json" {
+	if resp.SBOMID != "sb-1" || resp.Format != "cyclonedx" {
 		t.Errorf("resp = %+v", resp)
 	}
 }

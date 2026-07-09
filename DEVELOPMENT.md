@@ -74,24 +74,35 @@ hence `internal/` rather than `pkg/`.
 
 ## API contract
 
-`POST {base}/v1/sboms`, header `Authorization: Bearer <token>`. Only `sbom` is
-required:
+`POST {base}/v1/sboms`, header `Authorization: Bearer <token>`. Success is
+`202 Accepted` (idempotent — a re-submit returns the existing row with
+`existing: true`). Only `sbom` is required:
 
 | Field          | Req? | Purpose                                                   |
 | -------------- | ---- | --------------------------------------------------------- |
-| `sbom`         | yes  | base64 SBOM bytes                                         |
-| `image_ref`    | no   | override the image reference                              |
+| `sbom`         | yes  | base64 SBOM bytes (CycloneDX or SPDX; gzip allowed)       |
+| `image_ref`    | no   | override the image reference (`repo@sha256:…`)            |
 | `version`      | no   | the image tag (e.g. `v1.20.2`); else parsed from image_ref |
-| `format_hint`  | no   | `cyclonedx`\|`spdx` fast-fail assist (auto-detect otherwise) |
 | `generated_at` | no   | RFC3339 timestamp override                                |
 | `labels`       | no   | grouping labels (e.g. `team-x`, `prod`)                   |
 
-devradarctl sets `sbom`, `image_ref`, `version`, and `labels`; it relies on
-syft for format auto-detection and the SBOM's own `generated_at`, so it does not
-send `format_hint` or `generated_at`.
+devradarctl sets `sbom`, `image_ref`, `version`, and `labels`; it relies on the
+SBOM's own `generated_at`, so it does not send that field.
 
-Response: `{ sbom_id, image_ref, digest, format, existing }`. Source of truth:
-devradar `pkg/server/ingest.go` (see also its `IMPLEMENTATION.md`).
+Response: `{ sbom_id, image_ref, digest, format, existing }`, where `format` is
+`cyclonedx` or `spdx`.
+
+**Source of truth** is devradar's OpenAPI spec,
+`pkg/server/static/openapi.yaml` (implementation notes in `IMPLEMENTATION.md`).
+A verbatim copy is vendored at `internal/client/testdata/openapi.yaml` and the
+client's request/response are validated against it in
+`internal/client/contract_test.go`. `TestOpenAPISpec_IsCurrent` fails if the
+vendored copy drifts from devradar's (when that checkout is reachable, or
+`DEVRADAR_OPENAPI` points at it). Refresh the copy when the API changes:
+
+```sh
+cp ../devradar/pkg/server/static/openapi.yaml internal/client/testdata/openapi.yaml
+```
 
 ## Releasing
 
