@@ -63,12 +63,8 @@ echo "$DEVRADAR_TOKEN" | devradarctl submit --image alpine:3.20 --group team-x -
 
 ## Development
 
-```sh
-make build     # build ./bin/devradarctl
-make test      # unit tests (race + coverage)
-make lint      # go vet + golangci-lint
-make snapshot  # local goreleaser snapshot build
-```
+Contributing? See [DEVELOPMENT.md](DEVELOPMENT.md) for build, test, and release
+instructions.
 
 ## License
 
