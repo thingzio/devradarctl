@@ -49,7 +49,7 @@ release:
     owner: thingzio
     name: devradarctl
   prerelease: auto
-  draft: true
+  draft: false
 
 # Homebrew tap (cask). Dormant until the tap exists: skip_upload is templated on
 # HOMEBREW_DEPLOY_KEY so the cask is neither uploaded nor probed (no tap API call)
