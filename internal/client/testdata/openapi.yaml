@@ -12,7 +12,7 @@ info:
     list endpoints add a `next_cursor` when more pages exist; errors are
     `{"error": "..."}`. This document is the source of truth for the API
     contract — the human-readable version is at `/api`.
-  version: 0.0.0
+  version: 0.7.0
 servers:
   - url: https://devradar.thingz.io
     description: DevRadar SaaS

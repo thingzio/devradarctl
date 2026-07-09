@@ -69,10 +69,11 @@ Thin `main.go` → `internal/cli`. Nothing is meant for external import, hence
 `{ "sbom": <base64>, "image_ref"?, "version"?, "labels"?[], "generated_at"? }`.
 The CLI sends `sbom`/`image_ref`/`version`/`labels` only. Success is `202`;
 response `{ sbom_id, image_ref, digest, format, existing }` (`format` is
-`cyclonedx`|`spdx`). Source of truth: devradar's OpenAPI spec
-`pkg/server/static/openapi.yaml`, vendored at `internal/client/testdata/openapi.yaml`
-and enforced by `internal/client/contract_test.go`. Default base URL
-`https://devradar.thingz.io`.
+`cyclonedx`|`spdx`). Source of truth: the service's public OpenAPI doc at
+`https://devradar.thingz.io/openapi.yaml`, vendored at
+`internal/client/testdata/openapi.yaml` and enforced by
+`internal/client/contract_test.go` (offline) + `spec_sync_test.go` (fetches live,
+skips under `-short`/offline). Default base URL `https://devradar.thingz.io`.
 
 ## Release
 

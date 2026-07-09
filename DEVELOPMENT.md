@@ -92,17 +92,21 @@ SBOM's own `generated_at`, so it does not send that field.
 Response: `{ sbom_id, image_ref, digest, format, existing }`, where `format` is
 `cyclonedx` or `spdx`.
 
-**Source of truth** is devradar's OpenAPI spec,
-`pkg/server/static/openapi.yaml` (implementation notes in `IMPLEMENTATION.md`).
-A verbatim copy is vendored at `internal/client/testdata/openapi.yaml` and the
-client's request/response are validated against it in
-`internal/client/contract_test.go`. `TestOpenAPISpec_IsCurrent` fails if the
-vendored copy drifts from devradar's (when that checkout is reachable, or
-`DEVRADAR_OPENAPI` points at it). Refresh the copy when the API changes:
+**Source of truth** is the DevRadar service's own OpenAPI document, published
+publicly (no auth) at <https://devradar.thingz.io/openapi.yaml> (human-readable
+docs at `/api`). A copy is vendored at `internal/client/testdata/openapi.yaml`;
+the client's request/response are validated against it in
+`internal/client/contract_test.go`. `TestOpenAPISpec_IsCurrent` fetches the live
+spec and fails if the vendored copy has drifted (ignoring the per-deploy
+`info.version` stamp) — it is skipped under `-short` and when the service is
+unreachable, so the offline contract test still runs. Refresh the copy when the
+API changes:
 
 ```sh
-cp ../devradar/pkg/server/static/openapi.yaml internal/client/testdata/openapi.yaml
+curl -sS https://devradar.thingz.io/openapi.yaml -o internal/client/testdata/openapi.yaml
 ```
+
+Point the check at another instance with `DEVRADAR_OPENAPI_URL`.
 
 ## Releasing
 
