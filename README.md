@@ -49,7 +49,7 @@ it does everything in one step: resolves the manifest digest, generates an
 every layer, not just the final squashed filesystem), and submits it.
 
 ```sh
-echo "$DEVRADAR_TOKEN" | devradarctl submit --image alpine:3.20 --group team-x --group prod
+echo "$DEVRADAR_TOKEN" | devradarctl submit --image alpine:3.20 --label team-x --label prod
 ```
 
 This requires [`syft`](https://github.com/anchore/syft) on `PATH`.
@@ -70,7 +70,9 @@ DEVRADAR_TOKEN=xxx devradarctl submit --file alpine.cdx.json --image-ref alpine@
 | ---------------- | -------------------- | ----------------------------- | --------------------------------------------- |
 | `--base-url`     | `DEVRADAR_BASE_URL`  | `https://devradar.thingz.io`  | DevRadar service base URL                     |
 | (token)          | `DEVRADAR_TOKEN`     | —                             | API token (or piped via stdin)               |
-| `--group`        | `DEVRADAR_TAGS`      | —                             | Grouping label(s); repeatable / comma env     |
+| `--label`        | `DEVRADAR_LABELS`    | —                             | Grouping label(s); repeatable                 |
+| `--tag`          | —                    | image's tag                   | Image version to record (e.g. `v1.20.2`)      |
+| `--image-ref`    | —                    | —                             | Digest-pinned image reference (file mode)     |
 | `--syft-path`    | `DEVRADAR_SYFT_PATH` | `syft`                        | Path to the syft binary                       |
 | `--scope`        | —                    | `all-layers`                  | syft cataloging scope                         |
 | `--debug`        | `DEVRADAR_DEBUG`     | `false`                       | Debug logging (default level is warn)         |

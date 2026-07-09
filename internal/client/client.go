@@ -48,10 +48,10 @@ type SubmitRequest struct {
 	SBOM []byte
 	// ImageRef is the digest-pinned image reference (repo@sha256:…), optional.
 	ImageRef string
-	// Version is the human tag (e.g. "v1.20.2"), optional.
+	// Version is the image tag (e.g. "v1.20.2"), optional.
 	Version string
-	// Tags are tenant grouping labels (e.g. "team-x", "prod"), optional.
-	Tags []string
+	// Labels are tenant grouping labels (e.g. "team-x", "prod"), optional.
+	Labels []string
 }
 
 // SubmitResponse mirrors the POST /v1/sboms response body.
@@ -63,12 +63,12 @@ type SubmitResponse struct {
 	Existing bool   `json:"existing"`
 }
 
-// wireRequest is the JSON shape sent to the service.
+// wireRequest is the JSON shape sent to the service (POST /v1/sboms).
 type wireRequest struct {
 	SBOM     string   `json:"sbom"`
 	ImageRef string   `json:"image_ref,omitempty"`
 	Version  string   `json:"version,omitempty"`
-	Tags     []string `json:"tags,omitempty"`
+	Labels   []string `json:"labels,omitempty"`
 }
 
 // Submit posts an SBOM to {baseURL}/v1/sboms and returns the decoded response.
@@ -81,14 +81,14 @@ func (c *Client) Submit(ctx context.Context, in SubmitRequest) (*SubmitResponse,
 		SBOM:     base64.StdEncoding.EncodeToString(in.SBOM),
 		ImageRef: in.ImageRef,
 		Version:  in.Version,
-		Tags:     in.Tags,
+		Labels:   in.Labels,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
 	}
 
 	url := c.baseURL + "/v1/sboms"
-	slog.Debug("submitting SBOM", "url", url, "image_ref", in.ImageRef, "version", in.Version, "tags", in.Tags, "bytes", len(in.SBOM))
+	slog.Debug("submitting SBOM", "url", url, "image_ref", in.ImageRef, "version", in.Version, "labels", in.Labels, "bytes", len(in.SBOM))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {

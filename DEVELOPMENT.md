@@ -74,14 +74,24 @@ hence `internal/` rather than `pkg/`.
 
 ## API contract
 
-`POST {base}/v1/sboms`, header `Authorization: Bearer <token>`, body:
+`POST {base}/v1/sboms`, header `Authorization: Bearer <token>`. Only `sbom` is
+required:
 
-```json
-{ "sbom": "<base64>", "image_ref": "…", "version": "…", "tags": ["…"] }
-```
+| Field          | Req? | Purpose                                                   |
+| -------------- | ---- | --------------------------------------------------------- |
+| `sbom`         | yes  | base64 SBOM bytes                                         |
+| `image_ref`    | no   | override the image reference                              |
+| `version`      | no   | the image tag (e.g. `v1.20.2`); else parsed from image_ref |
+| `format_hint`  | no   | `cyclonedx`\|`spdx` fast-fail assist (auto-detect otherwise) |
+| `generated_at` | no   | RFC3339 timestamp override                                |
+| `labels`       | no   | grouping labels (e.g. `team-x`, `prod`)                   |
 
-Response: `{ sbom_id, image_ref, digest, format, existing }`. Only `sbom` is
-required. Source of truth: devradar `pkg/server/ingest.go`.
+devradarctl sets `sbom`, `image_ref`, `version`, and `labels`; it relies on
+syft for format auto-detection and the SBOM's own `generated_at`, so it does not
+send `format_hint` or `generated_at`.
+
+Response: `{ sbom_id, image_ref, digest, format, existing }`. Source of truth:
+devradar `pkg/server/ingest.go` (see also its `IMPLEMENTATION.md`).
 
 ## Releasing
 

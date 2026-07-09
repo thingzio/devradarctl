@@ -54,7 +54,7 @@ Thin `main.go` → `internal/cli`. Nothing is meant for external import, hence
   - `ref.go` — `SplitRef`/`Repository`/`Tag` (ported from devradar `pkg/sbom/ref.go`).
   - `digest.go` — manifest digest resolution **in-process** via `go-containerregistry` (crane lib); no `crane` binary needed.
   - `generate.go` — shells out to `syft` (`-q --scope all-layers -o cyclonedx-json <ref>`); `EnsureSyft` fails fast if absent.
-- `internal/client` — HTTP client for `POST /v1/sboms` (Bearer auth, base64 `sbom`, optional `image_ref`/`version`/`tags`).
+- `internal/client` — HTTP client for `POST /v1/sboms` (Bearer auth, base64 `sbom`, optional `image_ref`/`version`/`labels`).
 - `internal/logging` — slog setup; **warn** default level, `--debug` → debug, `--log-json` → JSON handler.
 
 ## Key conventions
@@ -66,9 +66,11 @@ Thin `main.go` → `internal/cli`. Nothing is meant for external import, hence
 ## API contract
 
 `POST {base}/v1/sboms`, header `Authorization: Bearer <token>`, body
-`{ "sbom": <base64>, "image_ref"?, "version"?, "tags"?[] }`. Response
-`{ sbom_id, image_ref, digest, format, existing }`. Source of truth:
-devradar `pkg/server/ingest.go`. Default base URL `https://devradar.thingz.io`.
+`{ "sbom": <base64>, "image_ref"?, "version"?, "labels"?[], "format_hint"?, "generated_at"? }`.
+The CLI sends `sbom`/`image_ref`/`version`/`labels` only. Response
+`{ sbom_id, image_ref, digest, format, existing }`. Source of truth: devradar
+`pkg/server/ingest.go` (details in its `IMPLEMENTATION.md`). Default base URL
+`https://devradar.thingz.io`.
 
 ## Release
 

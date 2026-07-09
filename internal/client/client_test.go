@@ -32,7 +32,7 @@ func TestSubmit_Success(t *testing.T) {
 		SBOM:     sbomDoc,
 		ImageRef: "alpine@sha256:x",
 		Version:  "3.20",
-		Tags:     []string{"team-x", "prod"},
+		Labels:   []string{"team-x", "prod"},
 	})
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
@@ -54,8 +54,8 @@ func TestSubmit_Success(t *testing.T) {
 	if gotBody.ImageRef != "alpine@sha256:x" || gotBody.Version != "3.20" {
 		t.Errorf("body image_ref/version = %q/%q", gotBody.ImageRef, gotBody.Version)
 	}
-	if len(gotBody.Tags) != 2 {
-		t.Errorf("body.tags = %v, want 2 tags", gotBody.Tags)
+	if len(gotBody.Labels) != 2 {
+		t.Errorf("body.labels = %v, want 2 labels", gotBody.Labels)
 	}
 	if resp.SBOMID != "sb-1" || resp.Format != "cyclonedx-json" {
 		t.Errorf("resp = %+v", resp)

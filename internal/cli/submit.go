@@ -44,10 +44,9 @@ func submitCmd() *cli.Command {
 				Usage: "human version tag to record (e.g. v1.20.2); defaults to the image's tag",
 			},
 			&cli.StringSliceFlag{
-				Name:    flagGroup,
-				Aliases: []string{"label"},
+				Name:    flagLabel,
 				Usage:   "grouping label(s) to attach; repeatable",
-				Sources: cli.EnvVars("DEVRADAR_TAGS"),
+				Sources: cli.EnvVars("DEVRADAR_LABELS"),
 			},
 			&cli.StringFlag{
 				Name:    flagBaseURL,
@@ -76,7 +75,7 @@ func runSubmit(ctx context.Context, c *cli.Command) error {
 	}
 
 	req := client.SubmitRequest{
-		Tags:    c.StringSlice(flagGroup),
+		Labels:  c.StringSlice(flagLabel),
 		Version: c.String(flagTag),
 	}
 

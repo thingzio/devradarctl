@@ -16,7 +16,7 @@ const (
 	flagFile     = "file"
 	flagImageRef = "image-ref"
 	flagTag      = "tag"
-	flagGroup    = "group"
+	flagLabel    = "label"
 	flagBaseURL  = "base-url"
 )
 
