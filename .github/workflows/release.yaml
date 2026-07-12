@@ -62,10 +62,11 @@ jobs:
           args: release --clean --timeout 10m
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Guarded Homebrew tap publish. skip_upload:auto in .goreleaser.yaml
-          # skips prereleases and, when this key is absent, the cask upload too —
-          # so the tap stays dormant until thingzio/homebrew-devradarctl exists
-          # and this secret is set.
+          # Guarded Homebrew tap publish into thingzio/homebrew-tap. This key is
+          # both the cask repository token (contents:write PAT) and the guard:
+          # skip_upload:auto in .goreleaser.yaml skips prereleases and, when the
+          # key is absent, the cask upload too — so no cross-repo push is
+          # attempted until this secret is set.
           HOMEBREW_DEPLOY_KEY: ${{ secrets.HOMEBREW_DEPLOY_KEY }}
 
       # SLSA build provenance over the released binaries. Keyless (Sigstore via

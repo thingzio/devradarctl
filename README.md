@@ -9,6 +9,14 @@ two commands:
 
 ## Install
 
+Homebrew (macOS/Linux):
+
+```sh
+brew install thingzio/tap/devradarctl
+```
+
+With Go:
+
 ```sh
 go install github.com/thingzio/devradarctl@latest
 ```

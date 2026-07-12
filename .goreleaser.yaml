@@ -51,17 +51,19 @@ release:
   prerelease: auto
   draft: false
 
-# Homebrew tap (cask). Dormant until the tap exists: skip_upload is templated on
-# HOMEBREW_DEPLOY_KEY so the cask is neither uploaded nor probed (no tap API call)
-# when the key is absent — avoiding a 404 on the not-yet-created tap repo. It
-# activates automatically once thingzio/homebrew-devradarctl exists and the
-# release workflow provides HOMEBREW_DEPLOY_KEY. 'auto' additionally skips
-# prereleases even when the key is present.
+# Homebrew tap (cask). Publishes into the shared org-wide tap
+# thingzio/homebrew-tap, so users install via `brew install thingzio/tap/devradarctl`.
+# Guarded by HOMEBREW_DEPLOY_KEY: skip_upload is templated on the key so the cask
+# is neither uploaded nor probed (no tap API call) when the key is absent —
+# avoiding a failed cross-repo push. It activates once the release workflow
+# provides HOMEBREW_DEPLOY_KEY (a fine-grained PAT with contents:write on
+# homebrew-tap). 'auto' additionally skips prereleases even when the key is present.
 homebrew_casks:
   - name: devradarctl
     repository:
       owner: thingzio
-      name: homebrew-devradarctl
+      name: homebrew-tap
+      token: '{{ .Env.HOMEBREW_DEPLOY_KEY }}'
     homepage: https://github.com/thingzio/devradarctl
     description: CLI to generate and submit SBOMs to DevRadar
     skip_upload: '{{ if index .Env "HOMEBREW_DEPLOY_KEY" }}auto{{ else }}true{{ end }}'

@@ -78,4 +78,5 @@ skips under `-short`/offline). Default base URL `https://devradar.thingz.io`.
 
 GoReleaser (`.goreleaser.yaml`): single build, linux+darwin × amd64+arm64,
 `CGO_ENABLED=0 -trimpath`, tar.gz archives, sha256 checksums, per-archive SBOMs,
-draft GitHub release, guarded Homebrew tap (`thingzio/homebrew-devradarctl`).
+draft GitHub release, guarded Homebrew cask into the shared org tap
+(`thingzio/homebrew-tap`; install via `brew install thingzio/tap/devradarctl`).

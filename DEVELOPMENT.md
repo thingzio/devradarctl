@@ -145,7 +145,10 @@ Go module cache.
 
 ### Homebrew tap
 
-The `.goreleaser.yaml` cask is dormant until the tap repo
-(`thingzio/homebrew-devradarctl`) exists and the release workflow provides a
-`HOMEBREW_DEPLOY_KEY` secret. `skip_upload` is templated on that key, so no tap
-API call is made while it is absent.
+The `.goreleaser.yaml` cask publishes into the shared org-wide tap
+(`thingzio/homebrew-tap`), so users install via
+`brew install thingzio/tap/devradarctl`. It is dormant until the release
+workflow provides a `HOMEBREW_DEPLOY_KEY` secret (a fine-grained PAT with
+`contents:write` on `homebrew-tap`, used as the cask repository token).
+`skip_upload` is templated on that key, so no cross-repo push is attempted
+while it is absent.
