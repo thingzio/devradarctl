@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 )
 
 // do issues an authenticated request to {baseURL}{path} (with optional query),
@@ -40,7 +39,7 @@ func (c *Client) do(ctx context.Context, method, path string, q url.Values, body
 		return fmt.Errorf("read response: %w", err)
 	}
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("%s %s failed: HTTP %d: %s", method, path, resp.StatusCode, strings.TrimSpace(string(raw)))
+		return newAPIError(resp.StatusCode, raw)
 	}
 
 	if out == nil || len(raw) == 0 {

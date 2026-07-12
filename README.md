@@ -173,6 +173,27 @@ devradarctl watch <sbom-id>
 devradarctl watch --repo ghcr.io/acme/api --interval 1m
 ```
 
+### VEX assertions
+
+Submit an [OpenVEX](https://github.com/openvex/spec) document to suppress
+findings you've assessed as not affecting you, and list what you've submitted.
+
+```sh
+devradarctl vex submit statement.json
+devradarctl vex list
+```
+
+**Scoping a statement's product.** DevRadar matches a VEX product two ways:
+
+- **By digest** — `pkg:oci/<repo>@sha256:…` matches exactly one image and takes
+  precedence. Use this for precision.
+- **By repo** — `pkg:oci/<repo>` matches by image **name** (the last path
+  segment) across digests, so a document written against `pkg:oci/aicr` still
+  applies. Convenient, but broader.
+
+VEX is a tenant assertion (unverified) and digest-scoped: a new image digest
+needs a new statement unless you matched by repo.
+
 ### Shell completion
 
 Completion is built in. For example, with bash:

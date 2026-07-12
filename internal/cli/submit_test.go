@@ -3,7 +3,34 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/thingzio/devradarctl/internal/client"
 )
+
+func TestSubmitError_429AddsHint(t *testing.T) {
+	err := submitError(&client.APIError{StatusCode: 429, Message: "tenant SBOM limit reached"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "tenant SBOM limit reached") {
+		t.Errorf("lost original message: %q", msg)
+	}
+	if !strings.Contains(msg, "archive") || !strings.Contains(msg, "raise the limit") {
+		t.Errorf("missing 429 hint: %q", msg)
+	}
+}
+
+func TestSubmitError_PassesThroughNon429(t *testing.T) {
+	orig := &client.APIError{StatusCode: 401, Message: "bad token"}
+	got := submitError(orig)
+	if got.Error() != orig.Error() {
+		t.Errorf("non-429 should pass through unchanged, got %q", got.Error())
+	}
+	if strings.Contains(got.Error(), "hint:") {
+		t.Errorf("non-429 should not get a hint: %q", got.Error())
+	}
+}
 
 func TestResolveToken_Env(t *testing.T) {
 	t.Setenv("DEVRADAR_TOKEN", "  env-tok  ")

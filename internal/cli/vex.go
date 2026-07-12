@@ -27,7 +27,11 @@ func vexSubmitCmd() *cli.Command {
 		Name:      "submit",
 		Usage:     "Submit an OpenVEX document",
 		ArgsUsage: "<file>",
-		Flags:     []cli.Flag{baseURLFlag(), outputFlag()},
+		Description: "Submits an OpenVEX document (raw JSON) as a tenant assertion.\n\n" +
+			"Scoping a statement's product: a digest (pkg:oci/repo@sha256:…) matches\n" +
+			"one image exactly and takes precedence; a repo (pkg:oci/repo) matches by\n" +
+			"image name (last path segment) across digests. Use a digest for precision.",
+		Flags: []cli.Flag{baseURLFlag(), outputFlag()},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			path, err := firstArg(c, "file")
 			if err != nil {

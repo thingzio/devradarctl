@@ -117,7 +117,7 @@ func runSubmit(ctx context.Context, c *cli.Command) error {
 	cl := client.New(c.String(flagBaseURL), token)
 	resp, err := cl.Submit(ctx, req)
 	if err != nil {
-		return err
+		return submitError(err)
 	}
 
 	slog.Debug("submitted", "sbom_id", resp.SBOMID, "digest", resp.Digest, "existing", resp.Existing,
@@ -133,6 +133,17 @@ func runSubmit(ctx context.Context, c *cli.Command) error {
 		fmt.Printf("attestation: %s\n", resp.VerificationStatus)
 	}
 	return nil
+}
+
+// submitError augments a submit failure with actionable guidance. A 429 covers
+// both rate limiting and the tenant SBOM/image caps; the server's message says
+// which, so we append a hint rather than re-classify. Other errors pass through.
+func submitError(err error) error {
+	if apiErr, ok := errors.AsType[*client.APIError](err); ok && apiErr.TooManyRequests() {
+		return fmt.Errorf("%w\nhint: tenant rate limit or SBOM/image cap reached — "+
+			"archive an SBOM (devradarctl sbom archive <id>) or raise the limit", err)
+	}
+	return err
 }
 
 // resolveToken returns the API token from DEVRADAR_TOKEN, or from stdin when it
