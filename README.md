@@ -1,11 +1,26 @@
 # devradarctl
 
 CLI for the [DevRadar](https://devradar.thingz.io) service. It hides the
-by-digest / all-layers / base64 mechanics of getting an SBOM into DevRadar behind
-two commands:
+by-digest / all-layers / base64 mechanics of getting an SBOM into DevRadar, and
+wraps DevRadar's read API so you can inspect findings, images, licenses, and
+change history — and gate CI on them — from the terminal.
 
-- `devradarctl sbom` — generate an all-layers CycloneDX SBOM for a container image.
-- `devradarctl submit` — submit an SBOM (from a file, or generated from an image).
+| Command | Purpose |
+| ------- | ------- |
+| `sbom generate` | Generate an all-layers CycloneDX SBOM for a container image (local; `syft`). |
+| `sbom get\|findings\|events\|failures\|licenses\|archive` | Inspect and manage a submitted SBOM. |
+| `submit` | Submit an SBOM (from a file, or generated from an image). |
+| `images list\|timeline\|sboms` | The tracked-image fleet view and per-image history. |
+| `licenses` | Fleet-wide license rollup. |
+| `vex submit\|list` | Submit and list OpenVEX documents. |
+| `watch` | Poll for new change events until interrupted. |
+
+> **Note:** local SBOM generation moved from `devradarctl sbom` to
+> **`devradarctl sbom generate`** so `sbom` can host the read subcommands.
+
+Read commands print a human-readable table by default; pass `--output json`
+(`-o json`) for raw JSON to pipe into `jq`. In JSON mode every page is fetched;
+tables show one page and hint when more exist (fetch all with `--all`).
 
 ## Install
 
@@ -26,7 +41,8 @@ Or download a release archive from the [releases page](https://github.com/thingz
 ### Prerequisites
 
 - [`syft`](https://github.com/anchore/syft) on `PATH` (or pass `--syft-path`) — used to
-  generate SBOMs. Only required for the `sbom` command and `submit --image`.
+  generate SBOMs. Only required for `sbom generate` and `submit --image`; the
+  read/query commands need only a token.
 - Image digest resolution is done in-process (no `crane` needed) and uses your
   ambient Docker credentials (`docker login`, credential helpers).
 
@@ -36,10 +52,10 @@ Or download a release archive from the [releases page](https://github.com/thingz
 
 ```sh
 # Print to stdout
-devradarctl sbom --image alpine:3.20
+devradarctl sbom generate --image alpine:3.20
 
 # Write to a file
-devradarctl sbom --image alpine:3.20 --output alpine.cdx.json
+devradarctl sbom generate --image alpine:3.20 --output alpine.cdx.json
 ```
 
 The image is pinned to its manifest digest (`repo@sha256:…`) before syft runs, so
@@ -98,12 +114,80 @@ The bundle also works in file mode alongside `--file`/`--image-ref`. For images
 signed with `cosign`, `cosign download attestation <image>` produces an
 equivalent bundle.
 
+### Query & inspect
+
+All read commands authenticate the same way as `submit` (`DEVRADAR_TOKEN` or
+piped stdin) and accept `--output table|json` (`-o`).
+
+```sh
+# The fleet, risk-ranked (filter by repo substring / label).
+devradarctl images list --min-severity high -q myrepo
+
+# SBOMs and change history for one image.
+devradarctl images sboms    --repo ghcr.io/acme/api
+devradarctl images timeline --repo ghcr.io/acme/api
+
+# Drill into one SBOM (id comes from `submit` or `images sboms`).
+devradarctl sbom get      <sbom-id>
+devradarctl sbom findings <sbom-id> --min-severity high --fixable
+devradarctl sbom events   <sbom-id>
+devradarctl sbom licenses <sbom-id>
+
+# Fleet-wide license rollup; per-package detail lives under `sbom licenses`.
+devradarctl licenses
+
+# Pipe JSON into jq.
+devradarctl sbom findings <sbom-id> -o json | jq '.[] | select(.kev)'
+
+# Stop tracking an SBOM (prompts unless --yes).
+devradarctl sbom archive <sbom-id>
+```
+
+### Gate CI on findings
+
+`sbom findings --exit-code` exits non-zero (code **2**) when a threshold is
+breached, so a pipeline step fails on unacceptable risk. Pair it with `--all`
+(or `-o json`) so every page is considered.
+
+```sh
+# Fail the build if any critical/high vuln exists.
+devradarctl sbom findings "$SBOM_ID" --all --exit-code --fail-on high
+
+# Or cap counts per severity.
+devradarctl sbom findings "$SBOM_ID" --all --exit-code --max-critical 0 --max-high 5
+```
+
+| Flag | Meaning |
+| ---- | ------- |
+| `--exit-code` | Exit non-zero when a threshold is breached. |
+| `--fail-on <severity>` | Breach if any finding at or above this severity exists. |
+| `--max-critical/-high/-medium N` | Breach if that severity's count exceeds `N`. |
+
+### Watch for changes
+
+`watch` polls on an interval and prints new change events as they appear, until
+interrupted (Ctrl-C). Target one SBOM or one image across digests.
+
+```sh
+devradarctl watch <sbom-id>
+devradarctl watch --repo ghcr.io/acme/api --interval 1m
+```
+
+### Shell completion
+
+Completion is built in. For example, with bash:
+
+```sh
+source <(devradarctl completion bash)   # zsh|fish|powershell also supported
+```
+
 ## Configuration
 
 | Flag             | Env var              | Default                       | Description                                   |
 | ---------------- | -------------------- | ----------------------------- | --------------------------------------------- |
 | `--base-url`     | `DEVRADAR_BASE_URL`  | `https://devradar.thingz.io`  | DevRadar service base URL                     |
 | (token)          | `DEVRADAR_TOKEN`     | —                             | API token (or piped via stdin)               |
+| `--output`, `-o` | `DEVRADAR_OUTPUT`    | `table`                       | Read-command output format: `table`\|`json`   |
 | `--label`        | `DEVRADAR_LABELS`    | —                             | Grouping label(s); repeatable                 |
 | `--tag`          | —                    | image's tag                   | Image version to record (e.g. `v1.20.2`)      |
 | `--image-ref`    | —                    | —                             | Digest-pinned image reference (file mode)     |

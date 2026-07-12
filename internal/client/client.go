@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -99,34 +98,12 @@ func (c *Client) Submit(ctx context.Context, in SubmitRequest) (*SubmitResponse,
 		return nil, fmt.Errorf("encode request: %w", err)
 	}
 
-	url := c.baseURL + "/v1/sboms"
-	slog.Debug("submitting SBOM", "url", url, "image_ref", in.ImageRef, "version", in.Version,
+	slog.Debug("submitting SBOM", "url", c.baseURL+"/v1/sboms", "image_ref", in.ImageRef, "version", in.Version,
 		"labels", in.Labels, "bytes", len(in.SBOM), "attestation_bytes", len(in.Attestation))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("submit to %s: %w", url, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("submission failed: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
-	}
-
 	var out SubmitResponse
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, fmt.Errorf("decode response (HTTP %d): %w", resp.StatusCode, err)
+	if err := c.do(ctx, http.MethodPost, "/v1/sboms", nil, bytes.NewReader(body), &out); err != nil {
+		return nil, err
 	}
 	return &out, nil
 }

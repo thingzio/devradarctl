@@ -6,7 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `devradarctl` — CLI for the DevRadar service (`https://devradar.thingz.io`).
 Module `github.com/thingzio/devradarctl`. MIT-licensed (thinkz.io). It wraps the
-SBOM generate + submit workflow behind two commands: `sbom` and `submit`.
+SBOM generate + submit workflow **and** DevRadar's read API. Command groups:
+`sbom` (generate + per-SBOM reads: get/findings/events/failures/licenses/archive),
+`submit`, `images` (list/timeline/sboms), `licenses` (fleet rollup), `vex`
+(submit/list), and `watch`.
 
 ## Commands
 
@@ -43,18 +46,29 @@ SBOM generate + submit workflow behind two commands: `sbom` and `submit`.
 Thin `main.go` → `internal/cli`. Nothing is meant for external import, hence
 `internal/` (not `pkg/`).
 
-- `main.go` — sets `version/commit/date` (ldflags), wires SIGINT/SIGTERM context, calls `cli.New(...).Run`.
-- `internal/cli` — urfave/cli **v3** command tree.
-  - `root.go` — root command, global `--debug`/`--log-json` flags, `Before` hook installs the logger.
-  - `sbom.go` — `sbom` command; `generateSBOM` (pin digest → syft → write) is shared with submit.
+- `main.go` — sets `version/commit/date` (ldflags), wires SIGINT/SIGTERM context, calls `cli.New(...).Run`. Owns the exit code: honors an `ExitCoder` (the findings gate) via `errors.AsType`, else 1 on error.
+- `internal/cli` — urfave/cli **v3** command tree. Root sets `ExitErrHandler` to a no-op so `main` owns the process exit (the default handler calls `os.Exit` from inside `Run`).
+  - `root.go` — root command, global `--debug`/`--log-json` flags, `Before` hook installs the logger; registers all command groups.
+  - `sbom.go` — `sbom` **group**: `generate` subcommand (local gen; `-o` = file path) plus read subcommands; `generateSBOM` (pin digest → syft → write) is shared with submit.
   - `submit.go` — `submit` command; `resolveToken` (env `DEVRADAR_TOKEN` → piped stdin), file vs image mode (mutually exclusive).
+  - `reads.go` — `apiClient`/`firstArg`/`listOptions`/`baseURLFlag`/`listFlags` helpers and the `sbom get/events/failures/licenses/archive` actions.
+  - `findings.go` — `sbom findings` action + `--exit-code` CI gate (`gateBreach`, exit code 2).
+  - `images.go`, `licenses.go`, `vex.go`, `watch.go` — the remaining command groups.
+  - `output.go` — `outputFlag()`/`asJSON`/`render` (JSON vs `text/tabwriter` table) + `moreHint` paging nudge.
+  - `format.go` — table formatters (`severitySummary`, `findingTable`, …) and the `confirm` prompt.
   - `flags.go` — shared flag constants and `syftFlags()`.
 - `internal/sbom` — SBOM domain logic.
   - `ref.go` — `SplitRef`/`Repository`/`Tag` image-reference parsing.
   - `digest.go` — manifest digest resolution **in-process** via `go-containerregistry` (crane lib); no `crane` binary needed.
   - `generate.go` — shells out to `syft` (`-q --scope all-layers -o cyclonedx-json <ref>`); `EnsureSyft` fails fast if absent.
-- `internal/client` — HTTP client for `POST /v1/sboms` (Bearer auth, base64 `sbom`, optional `image_ref`/`version`/`labels`).
+- `internal/client` — HTTP client for the DevRadar API.
+  - `client.go` — `Submit` (`POST /v1/sboms`, Bearer auth, base64 `sbom`, optional `image_ref`/`version`/`labels`/`attestation`).
+  - `http.go` — shared `do`/`get` round-trip helpers (auth, non-2xx → error with body, JSON decode).
+  - `reads.go` — read methods (`GetSBOM`, `Findings`, `Events`, `Failures`, `Licenses`, `ArchiveSBOM`, `Images`, `Timeline`, `ImageSBOMs`, `FleetLicenses`, `SubmitVEX`, `ListVEX`); list methods take a `ListOptions` and return the page + `NextCursor`.
+  - `models.go` — response structs mirroring the spec schemas.
 - `internal/logging` — slog setup; **warn** default level, `--debug` → debug, `--log-json` → JSON handler.
+
+Output convention for reads: default human table (one page + a "more available" hint on stderr); `--output json` (`-o json`) emits raw JSON and auto-follows **all** pages (`--all` forces full paging for tables too).
 
 ## Key conventions
 
@@ -64,15 +78,19 @@ Thin `main.go` → `internal/cli`. Nothing is meant for external import, hence
 
 ## API contract
 
-`POST {base}/v1/sboms`, header `Authorization: Bearer <token>`, body
-`{ "sbom": <base64>, "image_ref"?, "version"?, "labels"?[], "generated_at"? }`.
-The CLI sends `sbom`/`image_ref`/`version`/`labels` only. Success is `202`;
-response `{ sbom_id, image_ref, digest, format, existing }` (`format` is
-`cyclonedx`|`spdx`). Source of truth: the service's public OpenAPI doc at
+Submit: `POST {base}/v1/sboms`, header `Authorization: Bearer <token>`, body
+`{ "sbom": <base64>, "image_ref"?, "version"?, "labels"?[], "attestation"? }`.
+Success is `202`; response `{ sbom_id, image_ref, digest, format, existing,
+verification_status }` (`format` is `cyclonedx`|`spdx`). The CLI also wraps the
+read surface (`GET /v1/sboms/{id}`(+`/findings`,`/events`,`/failures`,
+`/licenses`), `DELETE /v1/sboms/{id}`, `GET /v1/images`(+`/timeline`,`/sboms`),
+`GET /v1/licenses`, `GET`/`POST /v1/vex`) — see `internal/client/reads.go`.
+Source of truth: the service's public OpenAPI doc at
 `https://devradar.thingz.io/openapi.yaml`, vendored at
 `internal/client/testdata/openapi.yaml` and enforced by
-`internal/client/contract_test.go` (offline) + `spec_sync_test.go` (fetches live,
-skips under `-short`/offline). Default base URL `https://devradar.thingz.io`.
+`internal/client/contract_test.go` (offline: request + representative read
+responses) + `spec_sync_test.go` (fetches live, skips under `-short`/offline).
+Default base URL `https://devradar.thingz.io`.
 
 ## Release
 

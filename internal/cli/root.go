@@ -21,6 +21,10 @@ func New(version, commit, date string) *cli.Command {
 		Version:               fmt.Sprintf("%s (commit: %s, date: %s)", version, commit, date),
 		EnableShellCompletion: true,
 		HideHelpCommand:       true,
+		// Suppress urfave/cli's default handler, which calls os.Exit from inside
+		// Run (bypassing main's cleanup and breaking tests). main owns the exit
+		// code by inspecting the returned error for an ExitCoder.
+		ExitErrHandler: func(context.Context, *cli.Command, error) {},
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:    "debug",
@@ -44,6 +48,10 @@ func New(version, commit, date string) *cli.Command {
 		Commands: []*cli.Command{
 			sbomCmd(),
 			submitCmd(),
+			imagesCmd(),
+			licensesCmd(),
+			vexCmd(),
+			watchCmd(),
 		},
 	}
 }

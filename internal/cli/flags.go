@@ -10,7 +10,6 @@ import (
 // from declarations.
 const (
 	flagImage       = "image"
-	flagOutput      = "output"
 	flagSyftPath    = "syft-path"
 	flagScope       = "scope"
 	flagFile        = "file"
@@ -19,6 +18,36 @@ const (
 	flagLabel       = "label"
 	flagBaseURL     = "base-url"
 	flagAttestation = "attestation"
+
+	// flagOutput is the read commands' --output/-o format selector (table|json).
+	flagOutput = "output"
+	// flagOutFile is `sbom generate`'s --output/-o destination file path. It
+	// shares the "output" name/alias with flagOutput but is disjoint (a
+	// different command) and carries file, not format, semantics.
+	flagOutFile = "output"
+
+	// Read/query and list-paging flags.
+	flagMinSeverity = "min-severity"
+	flagFixable     = "fixable"
+	flagSuppressed  = "suppressed"
+	flagSort        = "sort"
+	flagDir         = "dir"
+	flagLimit       = "limit"
+	flagAll         = "all"
+	flagRepo        = "repo"
+
+	// findings CI-gate flags.
+	flagExitCode    = "exit-code"
+	flagFailOn      = "fail-on"
+	flagMaxCritical = "max-critical"
+	flagMaxHigh     = "max-high"
+	flagMaxMedium   = "max-medium"
+
+	// watch flags.
+	flagInterval = "interval"
+
+	// archive confirmation.
+	flagYes = "yes"
 )
 
 // syftFlags returns the generation-tuning flags shared by `sbom` and the

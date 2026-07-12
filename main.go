@@ -4,12 +4,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/thingzio/devradarctl/internal/cli"
+	"github.com/urfave/cli/v3"
+
+	devcli "github.com/thingzio/devradarctl/internal/cli"
 )
 
 // Injected via -ldflags at build time.
@@ -27,7 +30,15 @@ func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := cli.New(version, commit, date).Run(ctx, os.Args); err != nil {
+	if err := devcli.New(version, commit, date).Run(ctx, os.Args); err != nil {
+		// An ExitCoder (e.g. the findings CI gate) carries its own code and has
+		// already printed any message it wanted; honor it without re-printing.
+		if ec, ok := errors.AsType[cli.ExitCoder](err); ok {
+			if msg := err.Error(); msg != "" {
+				fmt.Fprintln(os.Stderr, "error: "+msg)
+			}
+			return ec.ExitCode()
+		}
 		fmt.Fprintln(os.Stderr, "error: "+err.Error())
 		return 1
 	}

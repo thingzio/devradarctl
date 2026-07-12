@@ -11,9 +11,30 @@ import (
 	"github.com/thingzio/devradarctl/internal/sbom"
 )
 
+// sbomCmd is the `sbom` group: local generation plus the per-SBOM read
+// operations against the DevRadar API.
 func sbomCmd() *cli.Command {
 	return &cli.Command{
-		Name:      "sbom",
+		Name:            "sbom",
+		Usage:           "Generate SBOMs and inspect them in DevRadar",
+		HideHelpCommand: true,
+		Commands: []*cli.Command{
+			sbomGenerateCmd(),
+			sbomGetCmd(),
+			sbomFindingsCmd(),
+			sbomEventsCmd(),
+			sbomFailuresCmd(),
+			sbomLicensesCmd(),
+			sbomArchiveCmd(),
+		},
+	}
+}
+
+// sbomGenerateCmd is the local syft generation action (formerly `sbom`). Here
+// --output/-o is a destination file path, not a format selector.
+func sbomGenerateCmd() *cli.Command {
+	return &cli.Command{
+		Name:      "generate",
 		Usage:     "Generate an all-layers CycloneDX SBOM for a container image",
 		ArgsUsage: " ",
 		Description: "Resolves the image's manifest digest, then runs syft against the\n" +
@@ -27,7 +48,7 @@ func sbomCmd() *cli.Command {
 				Required: true,
 			},
 			&cli.StringFlag{
-				Name:    flagOutput,
+				Name:    flagOutFile,
 				Aliases: []string{"o"},
 				Usage:   "output file path (default: stdout)",
 			},
@@ -40,7 +61,7 @@ func sbomCmd() *cli.Command {
 			if err != nil {
 				return err
 			}
-			return writeOutput(c.String(flagOutput), res.Doc)
+			return writeOutput(c.String(flagOutFile), res.Doc)
 		},
 	}
 }

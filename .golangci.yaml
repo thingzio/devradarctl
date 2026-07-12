@@ -25,6 +25,14 @@ linters:
       rules:
         - name: exported
           disabled: true  # doc comments are conventional, not enforced
+    errcheck:
+      # Terminal/table output writes: a write error to stdout/stderr or the
+      # tabwriter is unactionable here (the tabwriter surfaces real errors at
+      # Flush, which callers do check). Matches how fmt.Printf is ignored.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
   exclusions:
     generated: lax
     rules:

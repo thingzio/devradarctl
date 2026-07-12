@@ -97,6 +97,79 @@ func TestSubmit_ConformsToOpenAPI(t *testing.T) {
 	}
 }
 
+// TestReads_ConformToOpenAPI validates that representative GET responses the
+// read clients decode conform to the DevRadar OpenAPI contract, so the response
+// structs in models.go / reads.go cannot silently drift from the documented
+// schemas. Each case pairs an endpoint path with a JSON body the client accepts.
+func TestReads_ConformToOpenAPI(t *testing.T) {
+	spec, err := os.ReadFile("testdata/openapi.yaml")
+	if err != nil {
+		t.Fatalf("read spec: %v", err)
+	}
+	doc, err := libopenapi.NewDocument(spec)
+	if err != nil {
+		t.Fatalf("parse spec: %v", err)
+	}
+	v, errs := validator.NewValidator(doc)
+	if len(errs) > 0 {
+		t.Fatalf("build validator: %v", errs)
+	}
+	if ok, verrs := v.ValidateDocument(); !ok {
+		t.Fatalf("spec itself is invalid: %v", verrs)
+	}
+
+	cases := []struct {
+		name string
+		path string
+		body string
+	}{
+		{
+			name: "GetSBOM",
+			path: "/v1/sboms/sb-1",
+			body: `{"sbom_id":"sb-1","image_ref":"alpine@sha256:` + zeros64 +
+				`","digest":"sha256:` + zeros64 + `","format":"cyclonedx","status":"active",` +
+				`"verification_status":"verified","counts":{"critical":1,"total":3,"relevant":1}}`,
+		},
+		{
+			name: "Findings",
+			path: "/v1/sboms/sb-1/findings",
+			body: `{"next_cursor":"c2","min_severity":"high","findings":[` +
+				`{"scanner":"grype","exposure":"CVE-2024-1234","package":"openssl","version":"3.0.0",` +
+				`"severity":"high","score":7.5,"is_fixed":true,"epss":0.4,"epss_pct":0.9,"kev":true,"vex_status":""}]}`,
+		},
+		{
+			name: "Images",
+			path: "/v1/images",
+			body: `{"min_severity":"medium","images":[{"repository":"repo/a","sbom_count":2,` +
+				`"digest_count":1,"versions":["v1"],"latest_at":"2024-01-01T00:00:00Z",` +
+				`"counts":{"total":5},"fixable":2,"failures":0}]}`,
+		},
+		{
+			name: "FleetLicenses",
+			path: "/v1/licenses",
+			body: `{"families":[{"key":"MIT","count":10}],"categories":[{"key":"permissive","count":10}],` +
+				`"packages":10,"unlicensed":1,"violations":0}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, "https://devradar.thingz.io"+tc.path, nil)
+			if err != nil {
+				t.Fatalf("build request: %v", err)
+			}
+			resp := &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(bytes.NewReader([]byte(tc.body))),
+			}
+			if ok, verrs := v.ValidateHttpResponse(req, resp); !ok {
+				reportViolations(t, tc.name+" response", verrs)
+			}
+		})
+	}
+}
+
 // reportViolations fails t with each OpenAPI validation error, including nested
 // schema reasons.
 func reportViolations(t *testing.T, kind string, verrs []*errors.ValidationError) {
