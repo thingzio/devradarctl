@@ -9,15 +9,16 @@ import (
 // Flag names shared across commands, kept as constants so lookups can't drift
 // from declarations.
 const (
-	flagImage    = "image"
-	flagOutput   = "output"
-	flagSyftPath = "syft-path"
-	flagScope    = "scope"
-	flagFile     = "file"
-	flagImageRef = "image-ref"
-	flagTag      = "tag"
-	flagLabel    = "label"
-	flagBaseURL  = "base-url"
+	flagImage       = "image"
+	flagOutput      = "output"
+	flagSyftPath    = "syft-path"
+	flagScope       = "scope"
+	flagFile        = "file"
+	flagImageRef    = "image-ref"
+	flagTag         = "tag"
+	flagLabel       = "label"
+	flagBaseURL     = "base-url"
+	flagAttestation = "attestation"
 )
 
 // syftFlags returns the generation-tuning flags shared by `sbom` and the

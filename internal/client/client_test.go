@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -59,6 +60,57 @@ func TestSubmit_Success(t *testing.T) {
 	}
 	if resp.SBOMID != "sb-1" || resp.Format != "cyclonedx" {
 		t.Errorf("resp = %+v", resp)
+	}
+}
+
+// TestSubmit_Attestation asserts the attestation bundle is base64-encoded onto
+// the `attestation` wire field and the verification_status is read back.
+func TestSubmit_Attestation(t *testing.T) {
+	bundle := []byte(`{"mediaType":"application/vnd.dev.sigstore.bundle+json"}`)
+	var gotBody wireRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &gotBody)
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(SubmitResponse{
+			SBOMID: "sb-1", Format: "cyclonedx", VerificationStatus: "verified",
+		})
+	}))
+	defer srv.Close()
+
+	resp, err := New(srv.URL, "tok").Submit(context.Background(), SubmitRequest{
+		SBOM:        []byte(`{"bomFormat":"CycloneDX"}`),
+		Attestation: bundle,
+	})
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if want := base64.StdEncoding.EncodeToString(bundle); gotBody.Attestation != want {
+		t.Errorf("body.attestation = %q, want base64 %q", gotBody.Attestation, want)
+	}
+	if resp.VerificationStatus != "verified" {
+		t.Errorf("VerificationStatus = %q, want verified", resp.VerificationStatus)
+	}
+}
+
+// TestSubmit_NoAttestationOmitsField ensures the field is omitted when no bundle
+// is supplied (omitempty), so existing submissions are unchanged on the wire.
+func TestSubmit_NoAttestationOmitsField(t *testing.T) {
+	var rawBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rawBody, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(SubmitResponse{SBOMID: "sb-1"})
+	}))
+	defer srv.Close()
+
+	if _, err := New(srv.URL, "tok").Submit(context.Background(), SubmitRequest{
+		SBOM: []byte(`{"bomFormat":"CycloneDX"}`),
+	}); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if strings.Contains(string(rawBody), "attestation") {
+		t.Errorf("wire body should omit attestation when none supplied: %s", rawBody)
 	}
 }
 

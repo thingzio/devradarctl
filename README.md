@@ -73,6 +73,7 @@ DEVRADAR_TOKEN=xxx devradarctl submit --file alpine.cdx.json --image-ref alpine@
 | `--label`        | `DEVRADAR_LABELS`    | —                             | Grouping label(s); repeatable                 |
 | `--tag`          | —                    | image's tag                   | Image version to record (e.g. `v1.20.2`)      |
 | `--image-ref`    | —                    | —                             | Digest-pinned image reference (file mode)     |
+| `--attestation`  | —                    | —                             | Path to a sigstore/cosign bundle to verify    |
 | `--syft-path`    | `DEVRADAR_SYFT_PATH` | `syft`                        | Path to the syft binary                       |
 | `--scope`        | —                    | `all-layers`                  | syft cataloging scope                         |
 | `--debug`        | `DEVRADAR_DEBUG`     | `false`                       | Debug logging (default level is warn)         |

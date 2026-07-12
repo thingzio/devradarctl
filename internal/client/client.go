@@ -52,6 +52,11 @@ type SubmitRequest struct {
 	Version string
 	// Labels are tenant grouping labels (e.g. "team-x", "prod"), optional.
 	Labels []string
+	// Attestation is the raw (un-encoded) sigstore/cosign bundle, optional. When
+	// present it is base64-encoded on the wire; the service verifies it (if a
+	// trust policy is configured) and reports the outcome in
+	// SubmitResponse.VerificationStatus.
+	Attestation []byte
 }
 
 // SubmitResponse mirrors the POST /v1/sboms response body.
@@ -61,14 +66,17 @@ type SubmitResponse struct {
 	Digest   string `json:"digest"`
 	Format   string `json:"format"`
 	Existing bool   `json:"existing"`
+	// VerificationStatus is the attestation outcome: unverified | verified | failed.
+	VerificationStatus string `json:"verification_status"`
 }
 
 // wireRequest is the JSON shape sent to the service (POST /v1/sboms).
 type wireRequest struct {
-	SBOM     string   `json:"sbom"`
-	ImageRef string   `json:"image_ref,omitempty"`
-	Version  string   `json:"version,omitempty"`
-	Labels   []string `json:"labels,omitempty"`
+	SBOM        string   `json:"sbom"`
+	ImageRef    string   `json:"image_ref,omitempty"`
+	Version     string   `json:"version,omitempty"`
+	Labels      []string `json:"labels,omitempty"`
+	Attestation string   `json:"attestation,omitempty"`
 }
 
 // Submit posts an SBOM to {baseURL}/v1/sboms and returns the decoded response.
@@ -77,18 +85,23 @@ func (c *Client) Submit(ctx context.Context, in SubmitRequest) (*SubmitResponse,
 	if len(in.SBOM) == 0 {
 		return nil, fmt.Errorf("sbom is empty")
 	}
-	body, err := json.Marshal(wireRequest{
+	wire := wireRequest{
 		SBOM:     base64.StdEncoding.EncodeToString(in.SBOM),
 		ImageRef: in.ImageRef,
 		Version:  in.Version,
 		Labels:   in.Labels,
-	})
+	}
+	if len(in.Attestation) > 0 {
+		wire.Attestation = base64.StdEncoding.EncodeToString(in.Attestation)
+	}
+	body, err := json.Marshal(wire)
 	if err != nil {
 		return nil, fmt.Errorf("encode request: %w", err)
 	}
 
 	url := c.baseURL + "/v1/sboms"
-	slog.Debug("submitting SBOM", "url", url, "image_ref", in.ImageRef, "version", in.Version, "labels", in.Labels, "bytes", len(in.SBOM))
+	slog.Debug("submitting SBOM", "url", url, "image_ref", in.ImageRef, "version", in.Version,
+		"labels", in.Labels, "bytes", len(in.SBOM), "attestation_bytes", len(in.Attestation))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {

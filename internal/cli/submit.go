@@ -54,6 +54,10 @@ func submitCmd() *cli.Command {
 				Value:   client.DefaultBaseURL,
 				Sources: cli.EnvVars("DEVRADAR_BASE_URL"),
 			},
+			&cli.StringFlag{
+				Name:  flagAttestation,
+				Usage: "path to a sigstore/cosign attestation bundle to verify against this SBOM",
+			},
 		}, syftFlags()...),
 		Action: runSubmit,
 	}
@@ -77,6 +81,14 @@ func runSubmit(ctx context.Context, c *cli.Command) error {
 	req := client.SubmitRequest{
 		Labels:  c.StringSlice(flagLabel),
 		Version: c.String(flagTag),
+	}
+
+	if att := c.String(flagAttestation); att != "" {
+		bundle, err := os.ReadFile(att)
+		if err != nil {
+			return fmt.Errorf("read attestation file: %w", err)
+		}
+		req.Attestation = bundle
 	}
 
 	if file != "" {
@@ -108,11 +120,17 @@ func runSubmit(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 
-	slog.Debug("submitted", "sbom_id", resp.SBOMID, "digest", resp.Digest, "existing", resp.Existing)
+	slog.Debug("submitted", "sbom_id", resp.SBOMID, "digest", resp.Digest, "existing", resp.Existing,
+		"verification_status", resp.VerificationStatus)
+	verb := "submitted"
 	if resp.Existing {
-		fmt.Printf("SBOM already present: id=%s format=%s image_ref=%s\n", resp.SBOMID, resp.Format, resp.ImageRef)
-	} else {
-		fmt.Printf("SBOM submitted: id=%s format=%s image_ref=%s\n", resp.SBOMID, resp.Format, resp.ImageRef)
+		verb = "already present"
+	}
+	fmt.Printf("SBOM %s: id=%s format=%s image_ref=%s\n", verb, resp.SBOMID, resp.Format, resp.ImageRef)
+	// Only mention verification when an attestation was actually evaluated; an
+	// unverified result is the default and adds no signal.
+	if req.Attestation != nil && resp.VerificationStatus != "" && resp.VerificationStatus != "unverified" {
+		fmt.Printf("attestation: %s\n", resp.VerificationStatus)
 	}
 	return nil
 }
