@@ -72,6 +72,32 @@ is pinned to the correct image digest.
 DEVRADAR_TOKEN=xxx devradarctl submit --file alpine.cdx.json --image-ref alpine@sha256:…
 ```
 
+**With a signed attestation (optional).** Pass `--attestation` with a
+[sigstore](https://www.sigstore.dev/) bundle to have DevRadar cryptographically
+verify the SBOM's subject against a signed provenance statement. Verification
+happens **server-side** — the CLI only uploads the bundle; the DevRadar service
+performs the check. When the service has a trust policy configured, the outcome
+is reported as `attestation: verified` (or `failed`); a verification failure
+never rejects the submission.
+
+Any public image published with GitHub build provenance carries such a bundle.
+Download it with the [`gh`](https://cli.github.com/) CLI, then submit — the
+example below uses `ghcr.io/nvidia/aicr`, which publishes SLSA provenance:
+
+```sh
+# 1. Download the sigstore bundle for the image (writes <digest>.jsonl).
+gh attestation download oci://ghcr.io/nvidia/aicr:v0.16.0 --repo NVIDIA/aicr
+
+# 2. Submit the image and verify it against the downloaded bundle.
+echo "$DEVRADAR_TOKEN" | devradarctl submit \
+  --image ghcr.io/nvidia/aicr:v0.16.0 \
+  --attestation sha256:223dcbeb0e3f3d9ccf4f92c9527ac466175181b1923f7535d1c65a68ef3cdffd.jsonl
+```
+
+The bundle also works in file mode alongside `--file`/`--image-ref`. For images
+signed with `cosign`, `cosign download attestation <image>` produces an
+equivalent bundle.
+
 ## Configuration
 
 | Flag             | Env var              | Default                       | Description                                   |
