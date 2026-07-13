@@ -1,6 +1,10 @@
 VERSION            ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
 COMMIT             := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
-DATE               := $(shell date +%Y-%m-%dT%H:%M:%S%Z)
+# Reproducible build date: honor SOURCE_DATE_EPOCH when set, else derive from the
+# HEAD commit time (not wall-clock), so the same commit always builds byte-for-byte
+# identical binaries. UTC, RFC3339.
+SOURCE_DATE_EPOCH  ?= $(shell git log -1 --pretty=%ct 2>/dev/null || echo 0)
+DATE               := $(shell date -u -r $(SOURCE_DATE_EPOCH) +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d @$(SOURCE_DATE_EPOCH) +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "unknown")
 GO_VERSION         := $(shell cat .go-version 2>/dev/null || go env GOVERSION | sed 's/go//')
 # Tool versions + thresholds read from .settings.yaml (single source of truth,
 # shared with CI). Fallbacks keep the Makefile usable without yq installed.

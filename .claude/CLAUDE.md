@@ -60,15 +60,16 @@ Thin `main.go` → `internal/cli`. Nothing is meant for external import, hence
 - `internal/sbom` — SBOM domain logic.
   - `ref.go` — `SplitRef`/`Repository`/`Tag` image-reference parsing.
   - `digest.go` — manifest digest resolution **in-process** via `go-containerregistry` (crane lib); no `crane` binary needed.
-  - `generate.go` — shells out to `syft` (`-q --scope all-layers -o cyclonedx-json <ref>`); `EnsureSyft` fails fast if absent.
+  - `generate.go` — shells out to `syft` (`-q --scope all-layers -o cyclonedx-json <ref>`); `EnsureSyft` fails fast if absent. stdout is captured through a `capBuffer` bounded to 20 MiB so a runaway generation can't exhaust memory.
 - `internal/client` — HTTP client for the DevRadar API.
-  - `client.go` — `Submit` (`POST /v1/sboms`, Bearer auth, base64 `sbom`, optional `image_ref`/`version`/`labels`/`attestation`).
-  - `http.go` — shared `do`/`get` round-trip helpers (auth, non-2xx → error with body, JSON decode).
+  - `client.go` — `Submit` (`POST /v1/sboms`, Bearer auth, base64 `sbom`, optional `image_ref`/`version`/`labels`/`attestation`); enforces the API size caps client-side (`MaxSBOMBytes` 20 MiB, `MaxVEXBytes` 5 MiB, `MaxAttestationBytes`).
+  - `http.go` — shared `doOnce`/`do`/`get` helpers. Responses are read via `io.LimitReader` (`maxResponseBytes`). **GET is retried** (bounded, exp backoff + jitter, honors `Retry-After`) on transport errors / 5xx / 429; writes are never retried.
+  - `error.go` — typed `APIError{StatusCode, Message}` parsed from the `{"error":...}` envelope; `TooManyRequests()` helper.
   - `reads.go` — read methods (`GetSBOM`, `Findings`, `Events`, `Failures`, `Licenses`, `ArchiveSBOM`, `Images`, `Timeline`, `ImageSBOMs`, `FleetLicenses`, `SubmitVEX`, `ListVEX`); list methods take a `ListOptions` and return the page + `NextCursor`.
   - `models.go` — response structs mirroring the spec schemas.
 - `internal/logging` — slog setup; **warn** default level, `--debug` → debug, `--log-json` → JSON handler.
 
-Output convention for reads: default human table (one page + a "more available" hint on stderr); `--output json` (`-o json`) emits raw JSON and auto-follows **all** pages (`--all` forces full paging for tables too).
+Output convention for reads: all output routes through `c.Writer`/`c.ErrWriter` (never `os.Stdout`) for testability. Default human table (one page + a "more available" hint on stderr); `--output json` (`-o json`) emits raw JSON and auto-follows **all** pages (`--all` forces full paging for tables too). `sbom findings --exit-code` also forces full paging so the CI gate never misses a finding on a later page. Shared flags fail closed (`validateCommon`: output/severity/dir/limit) before any network call.
 
 ## Key conventions
 

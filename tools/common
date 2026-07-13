@@ -2,6 +2,8 @@
 # Shared helpers for tools/ scripts (source, don't execute).
 set -euo pipefail
 
+# Exported for scripts that source this file (may be unused by some).
+# shellcheck disable=SC2034
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 RED='\033[0;31m'

@@ -96,6 +96,11 @@ performs the check. When the service has a trust policy configured, the outcome
 is reported as `attestation: verified` (or `failed`); a verification failure
 never rejects the submission.
 
+For CI that must **require** a verified attestation, add
+`--require-verified-attestation`: the SBOM is still stored, but `submit` exits
+non-zero (code **2**) unless `verification_status` is `verified`. It implies
+`--attestation`.
+
 Any public image published with GitHub build provenance carries such a bundle.
 Download it with the [`gh`](https://cli.github.com/) CLI, then submit — the
 example below uses `ghcr.io/nvidia/aicr`, which publishes SLSA provenance:
@@ -146,15 +151,16 @@ devradarctl sbom archive <sbom-id>
 ### Gate CI on findings
 
 `sbom findings --exit-code` exits non-zero (code **2**) when a threshold is
-breached, so a pipeline step fails on unacceptable risk. Pair it with `--all`
-(or `-o json`) so every page is considered.
+breached, so a pipeline step fails on unacceptable risk. The gate always
+evaluates **every** finding — `--exit-code` fetches all pages automatically, so
+a critical on page two can't slip through.
 
 ```sh
 # Fail the build if any critical/high vuln exists.
-devradarctl sbom findings "$SBOM_ID" --all --exit-code --fail-on high
+devradarctl sbom findings "$SBOM_ID" --exit-code --fail-on high
 
 # Or cap counts per severity.
-devradarctl sbom findings "$SBOM_ID" --all --exit-code --max-critical 0 --max-high 5
+devradarctl sbom findings "$SBOM_ID" --exit-code --max-critical 0 --max-high 5
 ```
 
 | Flag | Meaning |

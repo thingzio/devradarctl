@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"text/tabwriter"
 
 	"github.com/urfave/cli/v3"
@@ -32,14 +31,14 @@ func outputFlag() cli.Flag {
 // asJSON reports whether the command's --output selects JSON.
 func asJSON(c *cli.Command) bool { return c.String(flagOutput) == outputJSON }
 
-// render writes data to stdout in the selected format. For json it emits an
-// indented document; for table it runs the provided closure over a tabwriter
-// flushed to stdout. Any format other than json is treated as table.
+// render writes data to the command's stdout in the selected format. For json
+// it emits an indented document; for table it runs the provided closure over a
+// tabwriter. Routing through c.Writer (not os.Stdout) keeps output testable.
 func render(c *cli.Command, data any, table func(w io.Writer)) error {
 	if asJSON(c) {
-		return writeJSON(os.Stdout, data)
+		return writeJSON(c.Writer, data)
 	}
-	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	tw := tabwriter.NewWriter(c.Writer, 0, 4, 2, ' ', 0)
 	table(tw)
 	return tw.Flush()
 }
@@ -53,9 +52,10 @@ func writeJSON(w io.Writer, data any) error {
 
 // moreHint prints the "more available" nudge shown after a truncated table when
 // another page exists and --all was not requested. It is intentionally silent
-// for JSON callers (they receive the full set).
-func moreHint(nextCursor string, all bool) {
+// for JSON callers (they receive the full set). Written to the command's
+// stderr so it never contaminates piped stdout.
+func moreHint(c *cli.Command, nextCursor string, all bool) {
 	if nextCursor != "" && !all {
-		fmt.Fprintln(os.Stderr, "more results available; pass --all to fetch every page")
+		fmt.Fprintln(c.ErrWriter, "more results available; pass --all to fetch every page")
 	}
 }

@@ -216,6 +216,9 @@ func (c *Client) ListVEX(ctx context.Context) ([]map[string]any, error) {
 
 // SubmitVEX ingests a raw OpenVEX document (the caller supplies the JSON bytes).
 func (c *Client) SubmitVEX(ctx context.Context, doc []byte) (*VEXResult, error) {
+	if len(doc) > MaxVEXBytes {
+		return nil, fmt.Errorf("vex document is %d bytes, exceeds the %d-byte limit", len(doc), MaxVEXBytes)
+	}
 	if !json.Valid(doc) {
 		return nil, fmt.Errorf("vex document is not valid JSON")
 	}

@@ -23,6 +23,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: qualify
+    timeout-minutes: 20
     permissions:
       contents: write        # create the GitHub release
       id-token: write        # keyless signing for build provenance
@@ -48,11 +49,12 @@ jobs:
           check-latest: true
           cache-dependency-path: go.sum
 
-      # syft powers goreleaser's SBOM attachment (sboms: block).
+      # syft powers goreleaser's SBOM attachment (sboms: block). SHA-pinned
+      # action (not curl|sh from mutable main) for a verifiable install.
       - name: Install syft
-        run: |
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
-            | sh -s -- -b /usr/local/bin "${{ steps.v.outputs.syft }}"
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          syft-version: "${{ steps.v.outputs.syft }}"
 
       - name: Release
         id: goreleaser

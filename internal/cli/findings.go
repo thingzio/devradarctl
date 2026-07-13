@@ -21,18 +21,25 @@ var severityRank = map[string]int{
 }
 
 func runFindings(ctx context.Context, c *cli.Command) error {
+	if err := validateFailOn(c); err != nil {
+		return err
+	}
 	id, err := firstArg(c, "sbom-id")
 	if err != nil {
 		return err
 	}
-	cl, err := apiClient(c)
+	cl, err := apiClient(c) // also fail-closes on invalid shared flags
 	if err != nil {
 		return err
 	}
 
 	all := c.Bool(flagAll)
+	exitCode := c.Bool(flagExitCode)
 	// JSON always returns the full set; a table shows one page unless --all.
-	fetchAll := all || asJSON(c)
+	// A CI gate (--exit-code) must consider EVERY finding, so it forces full
+	// paging regardless of --all — otherwise the gate could pass on page one
+	// while a critical sits on page two.
+	fetchAll := all || asJSON(c) || exitCode
 
 	opts := client.FindingsOptions{
 		ListOptions: listOptions(c),
@@ -58,9 +65,9 @@ func runFindings(ctx context.Context, c *cli.Command) error {
 	if err := render(c, findings, func(w io.Writer) { findingTable(w, findings) }); err != nil {
 		return err
 	}
-	moreHint(lastCursor, all)
+	moreHint(c, lastCursor, all)
 
-	if c.Bool(flagExitCode) {
+	if exitCode {
 		if reason := gateBreach(c, findings); reason != "" {
 			fmt.Fprintf(c.ErrWriter, "gate failed: %s\n", reason)
 			return cli.Exit("", exitBreach)

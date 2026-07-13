@@ -58,6 +58,11 @@ func submitCmd() *cli.Command {
 				Name:  flagAttestation,
 				Usage: "path to a sigstore/cosign attestation bundle to verify against this SBOM",
 			},
+			&cli.BoolFlag{
+				Name: flagRequireVerified,
+				Usage: "exit non-zero if attestation verification does not return 'verified' " +
+					"(implies --attestation; for CI gates)",
+			},
 		}, syftFlags()...),
 		Action: runSubmit,
 	}
@@ -72,6 +77,10 @@ func runSubmit(ctx context.Context, c *cli.Command) error {
 	case file != "" && image != "":
 		return errors.New("--file and --image are mutually exclusive")
 	}
+	requireVerified := c.Bool(flagRequireVerified)
+	if requireVerified && c.String(flagAttestation) == "" {
+		return errors.New("--require-verified-attestation needs --attestation")
+	}
 
 	token, err := resolveToken(c.Reader)
 	if err != nil {
@@ -84,17 +93,20 @@ func runSubmit(ctx context.Context, c *cli.Command) error {
 	}
 
 	if att := c.String(flagAttestation); att != "" {
-		bundle, err := os.ReadFile(att)
+		bundle, err := readFileLimit(att, "attestation file", client.MaxAttestationBytes)
 		if err != nil {
-			return fmt.Errorf("read attestation file: %w", err)
+			return err
+		}
+		if len(bundle) == 0 {
+			return errors.New("attestation file is empty")
 		}
 		req.Attestation = bundle
 	}
 
 	if file != "" {
-		doc, err := os.ReadFile(file)
+		doc, err := readFileLimit(file, "SBOM file", client.MaxSBOMBytes)
 		if err != nil {
-			return fmt.Errorf("read SBOM file: %w", err)
+			return err
 		}
 		req.SBOM = doc
 		req.ImageRef = c.String(flagImageRef)
@@ -126,11 +138,23 @@ func runSubmit(ctx context.Context, c *cli.Command) error {
 	if resp.Existing {
 		verb = "already present"
 	}
-	fmt.Printf("SBOM %s: id=%s format=%s image_ref=%s\n", verb, resp.SBOMID, resp.Format, resp.ImageRef)
+	fmt.Fprintf(c.Writer, "SBOM %s: id=%s format=%s image_ref=%s\n", verb, resp.SBOMID, resp.Format, resp.ImageRef)
 	// Only mention verification when an attestation was actually evaluated; an
 	// unverified result is the default and adds no signal.
 	if req.Attestation != nil && resp.VerificationStatus != "" && resp.VerificationStatus != "unverified" {
-		fmt.Printf("attestation: %s\n", resp.VerificationStatus)
+		fmt.Fprintf(c.Writer, "attestation: %s\n", resp.VerificationStatus)
+	}
+
+	// CI gate: fail the command when verification did not succeed. This runs
+	// after the SBOM is stored (submission itself always succeeds server-side),
+	// so a failed gate does not undo the upload — it only signals the pipeline.
+	if requireVerified && resp.VerificationStatus != "verified" {
+		status := resp.VerificationStatus
+		if status == "" {
+			status = "unverified"
+		}
+		fmt.Fprintf(c.ErrWriter, "attestation gate failed: verification_status=%s\n", status)
+		return cli.Exit("", exitBreach)
 	}
 	return nil
 }

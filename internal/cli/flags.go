@@ -48,6 +48,9 @@ const (
 
 	// archive confirmation.
 	flagYes = "yes"
+
+	// submit attestation enforcement.
+	flagRequireVerified = "require-verified-attestation"
 )
 
 // syftFlags returns the generation-tuning flags shared by `sbom` and the

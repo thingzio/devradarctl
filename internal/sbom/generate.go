@@ -18,6 +18,11 @@ const DefaultSyftPath = "syft"
 // later layer deletes or shadows — the safest default for inventory.
 const DefaultScope = "all-layers"
 
+// maxSBOMBytes bounds syft's stdout so a runaway/hostile generation cannot
+// exhaust memory. It matches the DevRadar API's 20 MiB decoded-SBOM limit —
+// a larger document would be rejected on submit anyway.
+const maxSBOMBytes = 20 << 20
+
 // Options controls SBOM generation.
 type Options struct {
 	// SyftPath is the syft binary to invoke (name on PATH or absolute path).
@@ -63,10 +68,13 @@ func Generate(ctx context.Context, ref string, opts Options) ([]byte, error) {
 	args := []string{"-q", "--scope", opts.Scope, "-o", "cyclonedx-json", ref}
 	slog.Debug("generating SBOM", "syft", opts.SyftPath, "args", args)
 
-	var stdout, stderr bytes.Buffer
+	// Bound stdout so an unexpectedly huge document can't exhaust memory; cap
+	// stderr too since it is only used for an error message.
+	stdout := &capBuffer{max: maxSBOMBytes}
+	stderr := &capBuffer{max: 64 << 10}
 	cmd := exec.CommandContext(ctx, opts.SyftPath, args...)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 	if err := cmd.Run(); err != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
@@ -74,8 +82,40 @@ func Generate(ctx context.Context, ref string, opts Options) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("syft failed: %s", msg)
 	}
+	if stdout.overflow {
+		return nil, fmt.Errorf("syft produced an SBOM larger than the %d-byte limit", maxSBOMBytes)
+	}
 	if stdout.Len() == 0 {
 		return nil, errors.New("syft produced an empty SBOM")
 	}
 	return stdout.Bytes(), nil
 }
+
+// capBuffer is a bytes.Buffer that stops accepting data past max and records
+// that truncation happened, so a caller can distinguish a bounded read from a
+// complete one. Writes past the cap are discarded (not errored) so the child
+// process's pipe never blocks.
+type capBuffer struct {
+	buf      bytes.Buffer
+	max      int
+	overflow bool
+}
+
+func (b *capBuffer) Write(p []byte) (int, error) {
+	if remaining := b.max - b.buf.Len(); remaining > 0 {
+		if len(p) > remaining {
+			b.overflow = true
+			b.buf.Write(p[:remaining])
+		} else {
+			b.buf.Write(p)
+		}
+	} else if len(p) > 0 {
+		b.overflow = true
+	}
+	// Report the full length so the writer (os/exec copy) treats it as consumed.
+	return len(p), nil
+}
+
+func (b *capBuffer) Len() int       { return b.buf.Len() }
+func (b *capBuffer) Bytes() []byte  { return b.buf.Bytes() }
+func (b *capBuffer) String() string { return b.buf.String() }

@@ -4,6 +4,7 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=tools/common
 . "${DIR}/common"
 
 has_tools git
@@ -11,12 +12,29 @@ has_tools git
 bump_version() {
 	local bump_type=${1:-patch}
 
-	if ! git diff-index --quiet HEAD --; then
-		err "Working directory is not clean. Commit and push all changes before bumping version."
+	# Releases cut from a non-default branch are almost always a mistake.
+	local branch
+	branch="$(git rev-parse --abbrev-ref HEAD)"
+	if [ "$branch" != "main" ]; then
+		err "Releases must be cut from 'main' (on '$branch'). Checkout main first."
 	fi
 
-	if [ "$(git rev-list @{u}..HEAD --count 2>/dev/null || echo 0)" -gt 0 ]; then
+	# Clean tree: no staged/unstaged changes AND no untracked files (the latter
+	# is not caught by diff-index, but a stray file can still end up in a build).
+	if ! git diff-index --quiet HEAD --; then
+		err "Working directory is not clean. Commit or stash changes before bumping version."
+	fi
+	if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+		err "There are untracked files. Commit, stash, or clean them before bumping version."
+	fi
+
+	# In sync with upstream: neither ahead (unpushed) nor behind (stale).
+	git fetch --quiet origin || err "Unable to fetch origin to verify sync state."
+	if [ "$(git rev-list '@{u}..HEAD' --count 2>/dev/null || echo 0)" -gt 0 ]; then
 		err "There are unpushed commits. Push all changes before bumping version."
+	fi
+	if [ "$(git rev-list 'HEAD..@{u}' --count 2>/dev/null || echo 0)" -gt 0 ]; then
+		err "Local branch is behind origin. Pull before bumping version."
 	fi
 
 	local current_version
@@ -66,8 +84,14 @@ bump_version() {
 	msg "Bumping $bump_type version: $current_version → $new_version"
 
 	git tag -s -a "$new_version" -m "Release $new_version"
-	git push origin HEAD
-	git push origin "$new_version"
+	# Push HEAD and the tag in one atomic transaction: with --atomic, if either
+	# ref is rejected (e.g. a race pushed main), neither lands — so we never end
+	# up with a tag on the remote pointing at an unpushed commit. On failure,
+	# drop the local tag so a re-run starts clean.
+	if ! git push --atomic origin HEAD "refs/tags/${new_version}"; then
+		git tag -d "$new_version" >/dev/null 2>&1 || true
+		err "Atomic push of branch + tag '${new_version}' failed; local tag removed. Resolve and retry."
+	fi
 }
 
 if [ $# -eq 0 ]; then

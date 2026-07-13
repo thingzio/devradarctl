@@ -29,13 +29,17 @@ jobs:
           check-latest: true
           cache-dependency-path: go.sum
 
+      - name: Read syft version
+        id: syftver
+        run: echo "syft=$(yq -r '.security_tools.syft' .settings.yaml)" >> "$GITHUB_OUTPUT"
+
       # syft so the `sbom`/`submit --image` smoke paths could run; tests
       # themselves skip when it is absent, but keeping it here matches release.
+      # SHA-pinned action (not curl|sh from mutable main) for a verifiable install.
       - name: Install syft
-        run: |
-          version="$(yq -r '.security_tools.syft' .settings.yaml)"
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
-            | sh -s -- -b /usr/local/bin "$version"
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          syft-version: "${{ steps.syftver.outputs.syft }}"
 
       - name: Format check
         run: make fmt-check
@@ -72,3 +76,16 @@ jobs:
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: "${{ steps.v.outputs.golangci }}"
+
+  shell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      # ShellCheck the release/bump tooling. shellcheck is preinstalled on
+      # ubuntu-latest. tools/ scripts have no extension; lint them explicitly.
+      - name: ShellCheck
+        run: shellcheck tools/bump tools/common

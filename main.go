@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -30,17 +31,24 @@ func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if err := devcli.New(version, commit, date).Run(ctx, os.Args); err != nil {
-		// An ExitCoder (e.g. the findings CI gate) carries its own code and has
-		// already printed any message it wanted; honor it without re-printing.
-		if ec, ok := errors.AsType[cli.ExitCoder](err); ok {
-			if msg := err.Error(); msg != "" {
-				fmt.Fprintln(os.Stderr, "error: "+msg)
-			}
-			return ec.ExitCode()
-		}
-		fmt.Fprintln(os.Stderr, "error: "+err.Error())
-		return 1
+	err := devcli.New(version, commit, date).Run(ctx, os.Args)
+	return exitCode(os.Stderr, err)
+}
+
+// exitCode maps a Run error to a process exit code, printing to w. It is split
+// out from run so the mapping can be unit-tested without spawning a process.
+func exitCode(w io.Writer, err error) int {
+	if err == nil {
+		return 0
 	}
-	return 0
+	// An ExitCoder (e.g. the findings CI gate) carries its own code and has
+	// already printed any message it wanted; honor it without re-printing.
+	if ec, ok := errors.AsType[cli.ExitCoder](err); ok {
+		if msg := err.Error(); msg != "" {
+			fmt.Fprintln(w, "error: "+msg)
+		}
+		return ec.ExitCode()
+	}
+	fmt.Fprintln(w, "error: "+err.Error())
+	return 1
 }

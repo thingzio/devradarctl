@@ -33,8 +33,13 @@ func listFlags() []cli.Flag {
 }
 
 // apiClient resolves the API token (env or piped stdin) and returns a client
-// bound to the configured base URL.
+// bound to the configured base URL. It also fail-closes on invalid shared
+// flags (output/severity/dir/limit) before any network call, so every command
+// built on it validates uniformly.
 func apiClient(c *cli.Command) (*client.Client, error) {
+	if err := validateCommon(c); err != nil {
+		return nil, err
+	}
 	token, err := resolveToken(c.Reader)
 	if err != nil {
 		return nil, err
@@ -152,7 +157,7 @@ func sbomEventsCmd() *cli.Command {
 					if err := render(c, events, func(w io.Writer) { eventTable(w, events) }); err != nil {
 						return err
 					}
-					moreHint(pg.NextCursor, all)
+					moreHint(c, pg.NextCursor, all)
 					return nil
 				}
 				opts.Cursor = pg.NextCursor

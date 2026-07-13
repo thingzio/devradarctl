@@ -9,6 +9,22 @@ import (
 	"testing"
 )
 
+func TestSubmit_RejectsOversizeSBOM(t *testing.T) {
+	big := make([]byte, MaxSBOMBytes+1)
+	_, err := New("http://example.invalid", "tok").Submit(context.Background(), SubmitRequest{SBOM: big})
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("want size-limit error, got %v", err)
+	}
+}
+
+func TestSubmitVEX_RejectsOversize(t *testing.T) {
+	big := make([]byte, MaxVEXBytes+1)
+	_, err := New("http://example.invalid", "tok").SubmitVEX(context.Background(), big)
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("want size-limit error, got %v", err)
+	}
+}
+
 func TestAPIError_ParsesEnvelope(t *testing.T) {
 	e := newAPIError(http.StatusTooManyRequests, []byte(`{"error":"tenant SBOM limit reached"}`))
 	if !e.TooManyRequests() {

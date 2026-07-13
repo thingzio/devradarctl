@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/thingzio/devradarctl/internal/client"
 )
 
 // vexCmd is the `vex` group: submit OpenVEX documents and list submitted ones.
@@ -37,9 +38,9 @@ func vexSubmitCmd() *cli.Command {
 			if err != nil {
 				return err
 			}
-			doc, err := os.ReadFile(path)
+			doc, err := readFileLimit(path, "VEX file", client.MaxVEXBytes)
 			if err != nil {
-				return fmt.Errorf("read VEX file: %w", err)
+				return err
 			}
 			cl, err := apiClient(c)
 			if err != nil {

@@ -70,7 +70,7 @@ func imagesListCmd() *cli.Command {
 			}); err != nil {
 				return err
 			}
-			moreHint(lastCursor, all)
+			moreHint(c, lastCursor, all)
 			return nil
 		},
 	}
@@ -109,7 +109,7 @@ func imagesTimelineCmd() *cli.Command {
 			if err := render(c, events, func(w io.Writer) { timelineTable(w, events) }); err != nil {
 				return err
 			}
-			moreHint(lastCursor, all)
+			moreHint(c, lastCursor, all)
 			return nil
 		},
 	}
@@ -154,7 +154,7 @@ func imagesSBOMsCmd() *cli.Command {
 			}); err != nil {
 				return err
 			}
-			moreHint(lastCursor, all)
+			moreHint(c, lastCursor, all)
 			return nil
 		},
 	}

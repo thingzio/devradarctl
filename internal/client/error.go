@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // APIError is a non-2xx response from the DevRadar API. It carries the HTTP
@@ -16,6 +17,9 @@ type APIError struct {
 	// Message is the server's human-readable error, or the trimmed raw body when
 	// the response was not the {"error":"..."} envelope.
 	Message string
+	// retryAfter is the parsed Retry-After header (0 if absent), used by the GET
+	// retry loop to pace a backoff.
+	retryAfter time.Duration
 }
 
 // newAPIError builds an APIError from a status code and raw response body.

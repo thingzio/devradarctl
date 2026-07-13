@@ -19,6 +19,17 @@ const DefaultBaseURL = "https://devradar.thingz.io"
 // defaultTimeout bounds a single submit round-trip.
 const defaultTimeout = 60 * time.Second
 
+// Size caps mirror the DevRadar API's documented limits, enforced client-side
+// so oversized inputs fail fast (before upload) and responses can't exhaust
+// memory. MaxSBOMBytes / MaxVEXBytes are decoded-payload ceilings; the wire
+// body is larger once base64-encoded, which the server also bounds.
+const (
+	MaxSBOMBytes        = 20 << 20 // 20 MiB (POST /v1/sboms)
+	MaxVEXBytes         = 5 << 20  // 5 MiB (POST /v1/vex)
+	MaxAttestationBytes = 10 << 20 // 10 MiB — sigstore bundles are small; generous cap
+	maxResponseBytes    = 32 << 20 // 32 MiB — a large findings page plus headroom
+)
+
 // Client submits SBOMs to a DevRadar service.
 type Client struct {
 	baseURL string
@@ -83,6 +94,12 @@ type wireRequest struct {
 func (c *Client) Submit(ctx context.Context, in SubmitRequest) (*SubmitResponse, error) {
 	if len(in.SBOM) == 0 {
 		return nil, fmt.Errorf("sbom is empty")
+	}
+	if len(in.SBOM) > MaxSBOMBytes {
+		return nil, fmt.Errorf("sbom is %d bytes, exceeds the %d-byte limit", len(in.SBOM), MaxSBOMBytes)
+	}
+	if len(in.Attestation) > MaxAttestationBytes {
+		return nil, fmt.Errorf("attestation is %d bytes, exceeds the %d-byte limit", len(in.Attestation), MaxAttestationBytes)
 	}
 	wire := wireRequest{
 		SBOM:     base64.StdEncoding.EncodeToString(in.SBOM),

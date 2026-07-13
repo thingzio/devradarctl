@@ -4,7 +4,10 @@ project_name: devradarctl
 
 before:
   hooks:
-    - go mod tidy
+    # Verify modules are tidy without mutating go.mod/go.sum mid-release (which
+    # would undermine a reproducible build). Fails the release if they drift —
+    # run `go mod tidy` and commit before tagging.
+    - go mod tidy -diff
 
 builds:
   - id: devradarctl
