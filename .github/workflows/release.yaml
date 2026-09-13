@@ -20,6 +20,36 @@ jobs:
     permissions:
       contents: read
 
+  # .settings.yaml stays authoritative for the tools that build a release.
+  #
+  # Without this the shared workflow falls back to thingzio/actions' own pins,
+  # and the versions declared here would describe something that no longer
+  # happens: `make snapshot` would build with one goreleaser and the release
+  # with another, and the syft comment in .settings.yaml -- which says outright
+  # that it is "the version goreleaser uses to attach release SBOMs" -- would
+  # simply be untrue.
+  #
+  # cosign is deliberately not passed. The shared workflow holds it at >= v3.1.0
+  # because below that cosign writes a Rekor entry type sigstore-go cannot
+  # verify, and that constraint belongs with the code that depends on it.
+  versions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      goreleaser: ${{ steps.read.outputs.goreleaser }}
+      syft: ${{ steps.read.outputs.syft }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: read
+        run: |
+          set -euo pipefail
+          {
+            echo "goreleaser=$(yq -r '.build_tools.goreleaser' .settings.yaml)"
+            echo "syft=$(yq -r '.security_tools.syft' .settings.yaml)"
+          } >> "$GITHUB_OUTPUT"
+
   # Building, signing, attesting and publishing all happen in the shared build
   # definition, which changes two things beyond removing steps from here.
   #
@@ -38,7 +68,7 @@ jobs:
   # Pinned by commit SHA, not by tag: a floating tag is a build definition
   # someone can move, which is the mutable-builder problem Level 3 excludes.
   release:
-    needs: qualify
+    needs: [qualify, versions]
     permissions:
       contents: write
       # Granted to the called workflow, not used here. Only its attest job
@@ -46,6 +76,9 @@ jobs:
       id-token: write
       attestations: write
     uses: thingzio/actions/.github/workflows/release-go.yaml@960a5cffeb70c09b4d9c4522186794cb126518e9  # v1.6.0
+    with:
+      goreleaser_version: ${{ needs.versions.outputs.goreleaser }}
+      syft_version: ${{ needs.versions.outputs.syft }}
     secrets:
       # Both the cask repository token (a contents:write PAT on
       # thingzio/homebrew-tap) and the guard: skip_upload in .goreleaser.yaml is
