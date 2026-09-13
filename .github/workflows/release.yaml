@@ -20,62 +20,34 @@ jobs:
     permissions:
       contents: read
 
+  # Building, signing, attesting and publishing all happen in the shared build
+  # definition, which changes two things beyond removing steps from here.
+  #
+  # It reaches SLSA Build Level 3 rather than 2. goreleaser runs this
+  # repository's own hooks, and when the build and the OIDC token share a job --
+  # as they did here -- a hook could take the token and mint provenance naming
+  # this workflow as the builder for bytes it never produced. release-go.yaml
+  # keeps the identity in a job that runs no code from this repository, so
+  # Fulcio records thingzio/actions as the signer and this repository as the
+  # entry point. Consumers check that with --signer-workflow.
+  #
+  # It also signs. This workflow produced provenance but no signature; the
+  # shared one adds a keyless Sigstore signature over the checksum file, which
+  # already commits to every artifact by digest.
+  #
+  # Pinned by commit SHA, not by tag: a floating tag is a build definition
+  # someone can move, which is the mutable-builder problem Level 3 excludes.
   release:
-    runs-on: ubuntu-latest
     needs: qualify
-    timeout-minutes: 20
     permissions:
-      contents: write        # create the GitHub release
-      id-token: write        # keyless signing for build provenance
-      attestations: write    # actions/attest-build-provenance
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0      # full history for changelog
-          persist-credentials: false
-
-      - name: Read versions
-        id: v
-        run: |
-          {
-            echo "go=$(cat .go-version)"
-            echo "goreleaser=$(yq -r '.build_tools.goreleaser' .settings.yaml)"
-            echo "syft=$(yq -r '.security_tools.syft' .settings.yaml)"
-          } >> "$GITHUB_OUTPUT"
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: "${{ steps.v.outputs.go }}"
-          check-latest: true
-          cache-dependency-path: go.sum
-
-      # syft powers goreleaser's SBOM attachment (sboms: block). SHA-pinned
-      # action (not curl|sh from mutable main) for a verifiable install.
-      - name: Install syft
-        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
-        with:
-          syft-version: "${{ steps.v.outputs.syft }}"
-
-      - name: Release
-        id: goreleaser
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
-        with:
-          version: "${{ steps.v.outputs.goreleaser }}"
-          args: release --clean --timeout 10m
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Guarded Homebrew tap publish into thingzio/homebrew-tap. This key is
-          # both the cask repository token (contents:write PAT) and the guard:
-          # skip_upload:auto in .goreleaser.yaml skips prereleases and, when the
-          # key is absent, the cask upload too — so no cross-repo push is
-          # attempted until this secret is set.
-          HOMEBREW_DEPLOY_KEY: ${{ secrets.HOMEBREW_DEPLOY_KEY }}
-
-      # SLSA build provenance over the released binaries. Keyless (Sigstore via
-      # id-token), verifiable with `gh attestation verify <file> --repo <repo>`.
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
-        with:
-          subject-path: |
-            dist/*.tar.gz
-            dist/*_checksums.txt
+      contents: write
+      # Granted to the called workflow, not used here. Only its attest job
+      # receives it, and that job runs no code from this repository.
+      id-token: write
+      attestations: write
+    uses: thingzio/actions/.github/workflows/release-go.yaml@960a5cffeb70c09b4d9c4522186794cb126518e9  # v1.6.0
+    secrets:
+      # Both the cask repository token (a contents:write PAT on
+      # thingzio/homebrew-tap) and the guard: skip_upload in .goreleaser.yaml is
+      # templated on it, so no cross-repo push is attempted until it is set.
+      homebrew_deploy_key: ${{ secrets.HOMEBREW_DEPLOY_KEY }}

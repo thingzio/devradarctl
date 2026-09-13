@@ -52,7 +52,15 @@ release:
     owner: thingzio
     name: devradarctl
   prerelease: auto
-  draft: false
+  # Draft, because the shared release workflow creates the release before it
+  # signs it. It stays invisible until the signature has been verified, and the
+  # workflow's publish job flips this. Previously false, which published the
+  # binaries the moment they were built.
+  draft: true
+  # GitHub does not return drafts when looking a release up by tag, so without
+  # this a re-run after a partial failure cannot see the draft it made last
+  # time and opens a second one for the same tag.
+  use_existing_draft: true
 
 # Homebrew tap (cask). Publishes into the shared org-wide tap
 # thingzio/homebrew-tap, so users install via `brew install thingzio/tap/devradarctl`.
