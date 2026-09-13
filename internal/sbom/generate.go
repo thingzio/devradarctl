@@ -1,3 +1,19 @@
+// Copyright 2026 Thingz LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package sbom
 
 import (
@@ -72,7 +88,11 @@ func Generate(ctx context.Context, ref string, opts Options) ([]byte, error) {
 	// stderr too since it is only used for an error message.
 	stdout := &capBuffer{max: maxSBOMBytes}
 	stderr := &capBuffer{max: 64 << 10}
-	cmd := exec.CommandContext(ctx, opts.SyftPath, args...)
+	// SyftPath is operator-supplied configuration (--syft-path /
+	// DEVRADAR_SYFT_PATH) naming a program run with the caller's own authority,
+	// so it is inside the trust boundary rather than outside it -- see
+	// SECURITY.md. The argument vector is explicit; no shell interprets it.
+	cmd := exec.CommandContext(ctx, opts.SyftPath, args...) //nolint:gosec // G204: operator-configured binary, explicit argv
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	if err := cmd.Run(); err != nil {

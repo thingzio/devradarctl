@@ -1,0 +1,29 @@
+# Default owner for everything not matched below.
+* @mchmarny
+
+# The service contract. internal/client is validated against the DevRadar
+# service's published OpenAPI document, and the vendored copy is what the
+# offline contract test asserts against -- editing it to make a test pass is
+# how a client silently stops matching the service.
+/internal/client/ @mchmarny
+/internal/client/testdata/openapi.yaml @mchmarny
+
+# What a submitted SBOM claims to describe. Digest resolution and reference
+# parsing decide which image a document is attributed to; a bug here files
+# findings against the wrong artifact.
+/internal/sbom/ @mchmarny
+
+# The CI gates consumers wire into their pipelines. `submit
+# --require-verified-attestation` and `sbom findings --exit-code` are the two
+# places a defect fails open rather than loud.
+/internal/cli/findings.go @mchmarny
+/internal/cli/submit.go @mchmarny
+
+# Supply chain and release plumbing.
+/.github/ @mchmarny
+/.versions.yaml @mchmarny
+/.go-version @mchmarny
+/.goreleaser.yaml @mchmarny
+/tools/ @mchmarny
+/NOTICE @mchmarny
+/LICENSE @mchmarny

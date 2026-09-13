@@ -1,3 +1,19 @@
+// Copyright 2026 Thingz LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package cli
 
 import (
@@ -13,12 +29,6 @@ import (
 // exitBreach is the process exit code returned when --exit-code is set and a
 // findings threshold is breached.
 const exitBreach = 2
-
-// severityRank orders severities for the --fail-on floor comparison. Higher is
-// more severe; unknown/unrecognized sorts below negligible.
-var severityRank = map[string]int{
-	"critical": 5, "high": 4, "medium": 3, "low": 2, "negligible": 1,
-}
 
 func runFindings(ctx context.Context, c *cli.Command) error {
 	if err := validateFailOn(c); err != nil {
@@ -101,9 +111,9 @@ func gateBreach(c *cli.Command, findings []client.Finding) string {
 	for _, m := range []struct {
 		flag, sev string
 	}{
-		{flagMaxCritical, "critical"},
-		{flagMaxHigh, "high"},
-		{flagMaxMedium, "medium"},
+		{flagMaxCritical, sevCritical},
+		{flagMaxHigh, sevHigh},
+		{flagMaxMedium, sevMedium},
 	} {
 		if max := c.Int(m.flag); max >= 0 && counts[m.sev] > max {
 			return fmt.Sprintf("%s findings %d exceed max %d", m.sev, counts[m.sev], max)

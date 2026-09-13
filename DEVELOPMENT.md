@@ -1,18 +1,35 @@
 # Development
 
-Contributor guide for `devradarctl`. For user-facing install and usage, see the
-[README](README.md).
+Project internals for `devradarctl`. For user-facing install and usage, see the
+[README](README.md); for how to submit a change, see
+[CONTRIBUTING.md](CONTRIBUTING.md); for how a release is cut and verified, see
+[RELEASING.md](RELEASING.md).
 
 ## Prerequisites
 
 - Go — version pinned in [`.go-version`](.go-version).
-- [`golangci-lint`](https://golangci-lint.run), [`goreleaser`](https://goreleaser.com),
-  and [`syft`](https://github.com/anchore/syft) for linting, release builds, and
-  SBOM generation. Pinned versions live in [`.settings.yaml`](.settings.yaml).
-- [`yq`](https://github.com/mikefarah/yq) — the Makefile reads tool versions and
-  thresholds from `.settings.yaml` through it.
-- [`govulncheck`](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) for `make vulncheck`
-  (`go install golang.org/x/vuln/cmd/govulncheck@latest`).
+- `make`, `python3` (for `make notices`), and `git`.
+
+That is the whole list for day-to-day work. `golangci-lint`, `govulncheck`,
+`actionlint`, and `gitleaks` install themselves into `bin/tools` at their pinned
+versions the first time a target needs them, so a local `make lint` and the CI
+lint job run the identical binary.
+
+Three tools are *not* auto-installed:
+
+- [`yamllint`](https://github.com/adrienverge/yamllint) — a Python tool, so it
+  is not a `go install`. CI installs the pinned version with pipx; locally,
+  `pipx install yamllint==<pin>` then `make lint-yaml`. It is deliberately not
+  part of `make qualify`, so committing a Go change does not require it.
+- [`syft`](https://github.com/anchore/syft) — devradarctl shells out to it at
+  runtime. Tests that need it skip when it is absent; `make tools` does not
+  fetch it, but `bin/tools/syft` is a valid target if you want the pinned one.
+- [`goreleaser`](https://goreleaser.com) — only `make snapshot` and `make release`
+  use it, and both say so when it is missing.
+
+Every first-party Go file carries the Apache-2.0 header. `make license` applies
+it to anything missing one; `make license-check` (part of `make qualify`) fails
+if a file slipped through.
 
 ## Common tasks
 
@@ -22,13 +39,22 @@ make install        # install to GOBIN
 make test           # race detector + coverage profile
 make test-coverage  # test + enforce the coverage threshold
 make lint           # go vet + golangci-lint
+make lint-actions   # actionlint over .github/workflows
+make lint-yaml      # yamllint --strict (needs pipx-installed yamllint)
 make fmt-check      # gofmt check, no mutation (CI-friendly)
+make license        # apply the Apache-2.0 header to first-party Go files
+make license-check  # fail if any first-party Go file is missing it
+make secrets        # gitleaks over the working tree and the full history
 make vulncheck      # govulncheck ./...
-make qualify        # full local gate: fmt-check + test-coverage + lint (mirrors CI)
-make tidy           # go fmt + go mod tidy
+make qualify        # full local gate, mirrors CI
+make tidy           # go fmt + go mod tidy + verify + regenerate notices
+make notices        # regenerate THIRD_PARTY_NOTICES.md from the build graph
 make upgrade        # go get -u ./... + tidy
+make tools          # install the pinned dev tools into bin/tools
 make snapshot       # local goreleaser build, no publish
 make info           # project + resolved tool versions
+make clean          # remove build artifacts (keeps the tool cache)
+make clean-all      # also remove bin/tools
 ```
 
 Run a single test:
@@ -67,10 +93,20 @@ hence `internal/` rather than `pkg/`.
 
 ## Version & tool sources
 
-- [`.go-version`](.go-version) — Go toolchain version, read by the Makefile and CI.
-- [`.settings.yaml`](.settings.yaml) — pinned tool versions (goreleaser,
-  golangci-lint, syft) and quality thresholds, read via `yq`. Single source of
-  truth shared by the Makefile and workflows; carries `# renovate:` annotations.
+- [`.go-version`](.go-version) — Go toolchain version. Read by `go-version-file`
+  in every workflow and by the Makefile, so `actions/setup-go` and a local build
+  cannot disagree. It must stay consistent with the `go` directive in `go.mod`.
+- [`.versions.yaml`](.versions.yaml) — pinned tool versions (goreleaser,
+  golangci-lint, syft, govulncheck) and quality thresholds. Single source of
+  truth shared by the Makefile and the workflows; carries `# renovate:`
+  annotations.
+
+Neither file has a second copy of its values anywhere. The Makefile parses
+`.versions.yaml` with `sed` (no `yq` dependency, so `make help` works on a bare
+machine) and CI reads it through the
+[`load-versions`](.github/actions/load-versions/action.yaml) composite action.
+A version that appears only in a Makefile recipe or only in a workflow step is a
+bug: the two drift, and "works on my machine" becomes unreproducible.
 
 ## API contract
 
@@ -108,47 +144,54 @@ curl -sS https://devradar.thingz.io/openapi.yaml -o internal/client/testdata/ope
 
 Point the check at another instance with `DEVRADAR_OPENAPI_URL`.
 
-## Releasing
+## CI
 
-Releases are cut by pushing a semver tag, which triggers
-[`.github/workflows/release.yaml`](.github/workflows/release.yaml):
+On every push and pull request:
 
-```sh
-make bump-patch   # v0.1.2 -> v0.1.3: signed tag + push
-make bump-minor   # v0.1.2 -> v0.2.0
-make bump-major   # v0.1.2 -> v1.0.0
-```
+- [`qualify.yaml`](.github/workflows/qualify.yaml) — the reusable gate, three jobs:
+  - **test** — format check, `go vet`, the race-detector suite with its coverage floor.
+  - **lint** — golangci-lint, actionlint, yamllint, license headers, gitleaks
+    (working tree *and* full history), and a check that `go mod tidy` is
+    committed. Checks out at `fetch-depth: 0`, because a shallow clone makes the
+    history secret scan pass without scanning anything.
 
-Each of these requires a clean, fully-pushed tree (`tools/bump` enforces it).
-The workflow re-qualifies from scratch, then runs `goreleaser`, which:
-
-- builds binaries for linux/darwin × amd64/arm64 (`CGO_ENABLED=0 -trimpath`),
-- attaches sha256 checksums and per-archive CycloneDX SBOMs,
-- publishes a full (non-draft) GitHub release,
-- attaches SLSA build provenance via `actions/attest-build-provenance`.
-
-Verify a downloaded artifact's provenance:
-
-```sh
-gh attestation verify <archive> --repo thingzio/devradarctl
-```
-
-### CI
-
-- [`qualify.yaml`](.github/workflows/qualify.yaml) — reusable gate (fmt-check, vet, lint, test + coverage).
+    `.golangci.yaml` matches devproof's: ~25 linters including gosec,
+    contextcheck, noctx, depguard, and `govet`'s shadow check.
+  - **vuln** — `make vulncheck` (govulncheck at its pinned version).
+  - **shell** — ShellCheck over `tools/`.
 - [`test.yaml`](.github/workflows/test.yaml) — runs `qualify` on push/PR to `main`.
-- [`release.yaml`](.github/workflows/release.yaml) — on a `v*` tag: re-qualifies, then releases.
+
+On a tag:
+
+- [`release.yaml`](.github/workflows/release.yaml) — re-qualifies, resolves
+  pinned tool versions, then calls the shared `thingzio/actions` build
+  definition. See [RELEASING.md](RELEASING.md).
+
+On a schedule:
+
+- [`codeql.yaml`](.github/workflows/codeql.yaml) — CodeQL static analysis via
+  the shared workflow, Mondays. Results land in the repository's security tab.
+- [`verify-release.yaml`](.github/workflows/verify-release.yaml) — re-verifies
+  the latest release's signature and provenance the way a consumer would,
+  Mondays. devproof has a `keyless` workflow that signs a fixture against live
+  Sigstore; devradarctl signs nothing, so the equivalent check is that what it
+  *published* still verifies against the identity RELEASING.md names.
+
+Supporting:
+
+- [`load-versions`](.github/actions/load-versions/action.yaml) — composite
+  action that turns `.versions.yaml` pins into step outputs.
 
 Action SHAs are pinned; jobs use least-privilege `permissions` and
 `persist-credentials: false`. Dependencies are not vendored — CI relies on the
 Go module cache.
 
-### Homebrew tap
+## Releasing
 
-The `.goreleaser.yaml` cask publishes into the shared org-wide tap
-(`thingzio/homebrew-tap`), so users install via
-`brew install thingzio/tap/devradarctl`. It is dormant until the release
-workflow provides a `HOMEBREW_DEPLOY_KEY` secret (a fine-grained PAT with
-`contents:write` on `homebrew-tap`, used as the cask repository token).
-`skip_upload` is templated on that key, so no cross-repo push is attempted
-while it is absent.
+Releases are cut by pushing a semver tag (`make bump-patch`), which builds,
+signs, attests, verifies, and only then publishes. The build reaches SLSA Build
+Level 3 because the signing identity lives in a job that runs no code from this
+repository.
+
+The full procedure, the verification commands consumers should run, and what to
+do when a release goes wrong are in **[RELEASING.md](RELEASING.md)**.

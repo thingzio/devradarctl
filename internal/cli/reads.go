@@ -1,3 +1,19 @@
+// Copyright 2026 Thingz LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package cli
 
 import (
@@ -71,7 +87,7 @@ func sbomGetCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "get",
 		Usage:     "Show metadata and severity breakdown for an SBOM",
-		ArgsUsage: "<sbom-id>",
+		ArgsUsage: argsSBOMID,
 		Flags: []cli.Flag{
 			baseURLFlag(), outputFlag(),
 			&cli.StringFlag{Name: flagMinSeverity, Usage: "minimum severity floor for the breakdown"},
@@ -109,7 +125,7 @@ func sbomFindingsCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "findings",
 		Usage:     "List current vulnerability findings for an SBOM",
-		ArgsUsage: "<sbom-id>",
+		ArgsUsage: argsSBOMID,
 		Description: "Prints findings at or above --min-severity. With --exit-code, exits\n" +
 			"non-zero when a threshold is breached (for CI gates):\n" +
 			"  --fail-on <severity>  fail if any finding at or above this severity exists\n" +
@@ -133,7 +149,7 @@ func sbomEventsCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "events",
 		Usage:     "Show the change log for an SBOM",
-		ArgsUsage: "<sbom-id>",
+		ArgsUsage: argsSBOMID,
 		Flags:     append(listFlags(), baseURLFlag(), outputFlag()),
 		Action: func(ctx context.Context, c *cli.Command) error {
 			id, err := firstArg(c, "sbom-id")
@@ -170,7 +186,7 @@ func sbomFailuresCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "failures",
 		Usage:     "Show recent scan failures for an SBOM",
-		ArgsUsage: "<sbom-id>",
+		ArgsUsage: argsSBOMID,
 		Flags: []cli.Flag{
 			baseURLFlag(), outputFlag(),
 			&cli.IntFlag{Name: flagLimit, Usage: "max rows"},
@@ -202,7 +218,7 @@ func sbomLicensesCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "licenses",
 		Usage:     "List package licenses and policy verdicts for an SBOM",
-		ArgsUsage: "<sbom-id>",
+		ArgsUsage: argsSBOMID,
 		Flags:     []cli.Flag{baseURLFlag(), outputFlag()},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			id, err := firstArg(c, "sbom-id")
@@ -235,7 +251,7 @@ func sbomArchiveCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "archive",
 		Usage:     "Stop tracking an SBOM (idempotent; history retained)",
-		ArgsUsage: "<sbom-id>",
+		ArgsUsage: argsSBOMID,
 		Flags: []cli.Flag{
 			baseURLFlag(),
 			&cli.BoolFlag{Name: flagYes, Aliases: []string{"y"}, Usage: "skip the confirmation prompt"},

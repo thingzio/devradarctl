@@ -38,8 +38,13 @@ archives:
       - LICENSE
       - README.md
 
+# Named checksums.txt, not <project>_checksums.txt. The shared release workflow
+# normalises whatever it finds to checksums.txt before signing it and publishes
+# the signature as checksums.txt.bundle, so any other name leaves the release
+# carrying a signature whose filename does not match the file it covers --
+# which every consumer then has to be told about.
 checksum:
-  name_template: "{{ .ProjectName }}_checksums.txt"
+  name_template: 'checksums.txt'
   algorithm: sha256
 
 # Per-binary SBOMs of the released artifacts (requires syft on the release host).

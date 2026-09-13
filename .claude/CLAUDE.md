@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 
 `devradarctl` — CLI for the DevRadar service (`https://devradar.thingz.io`).
-Module `github.com/thingzio/devradarctl`. MIT-licensed (thinkz.io). It wraps the
+Module `github.com/thingzio/devradarctl`. Apache-2.0 (thingz.io). It wraps the
 SBOM generate + submit workflow **and** DevRadar's read API. Command groups:
 `sbom` (generate + per-SBOM reads: get/findings/events/failures/licenses/archive),
 `submit`, `images` (list/timeline/sboms), `licenses` (fleet rollup), `vex`
@@ -15,29 +15,48 @@ SBOM generate + submit workflow **and** DevRadar's read API. Command groups:
 
 - `make build` — build `./bin/devradarctl` (ldflags inject version/commit/date).
 - `make test` — race + coverage profile. Single test: `go test -run TestName ./internal/...`.
-- `make test-coverage` — test + enforce `quality.coverage_threshold` from `.settings.yaml`.
+- `make test-coverage` — test + enforce `quality.coverage_threshold` from `.versions.yaml`.
 - `make lint` — `go vet` + `golangci-lint` (config in `.golangci.yaml`, v2 schema).
 - `make fmt-check` — CI-friendly gofmt check (no mutation).
 - `make vulncheck` — `govulncheck ./...`.
-- `make qualify` — full local gate: fmt-check + test-coverage + lint (mirrors CI).
+- `make qualify` — full local gate: fmt-check + license-check + test-coverage + lint + lint-actions + secrets + vulncheck (mirrors CI). Only `lint-yaml` sits outside it, because yamllint is a pipx install rather than a `go install`.
+- `make license` / `make license-check` — Apache-2.0 header on every first-party Go file.
+- `make lint-actions` / `make lint-yaml` / `make secrets` — actionlint, yamllint (pipx), gitleaks.
+- `make tidy` — `go fmt` + `go mod tidy` + `go mod verify` + regenerate notices.
+- `make notices` — regenerate `THIRD_PARTY_NOTICES.md` from the build graph.
 - `make upgrade` — `go get -u ./...` + tidy.
+- `make tools` — install the pinned dev tools into `bin/tools`.
 - `make snapshot` — local `goreleaser` snapshot build (`--skip=sbom`).
-- `make bump-{patch,minor,major}` — tag + push a semver release via `tools/bump`, triggering the release workflow.
+- `make bump-{patch,minor,major}` — tag + push a semver release via `tools/bump`, triggering the release workflow. `tools/bump` runs `make qualify` first and refuses a dirty, unpushed, or non-`main` tree.
 
 ## Version & tool sources
 
-- `.go-version` — Go toolchain version (read by Makefile + all CI via `cat`).
-- `.settings.yaml` — pinned tool versions (goreleaser, golangci-lint, syft) and
-  quality thresholds, read via `yq`. Single source of truth shared by the Makefile and workflows; carries `# renovate:` annotations.
+- `.go-version` — Go toolchain version (`go-version-file` in CI, `cat` in the
+  Makefile). Must stay consistent with the `go` directive in `go.mod`.
+- `.versions.yaml` — pinned tool versions (goreleaser, golangci-lint, syft,
+  govulncheck) and quality thresholds. Single source of truth shared by the
+  Makefile and workflows; carries `# renovate:` annotations.
+- The Makefile parses it with `sed` (no `yq` dependency); CI reads it through the
+  `.github/actions/load-versions` composite action. Never add a second copy of a
+  version as a fallback — that is the drift the file exists to prevent.
+- `golangci-lint`/`govulncheck`/`syft` install into `bin/tools` gated on a
+  version-stamped sentinel (`bin/tools/.<tool>-<version>`), so bumping a pin
+  actually reinstalls. Keying on the bare binary name would not.
 
 ## CI / release
 
-- `.github/workflows/qualify.yaml` — reusable gate (fmt-check, vet, lint, test+coverage).
+- `.github/workflows/qualify.yaml` — reusable gate, four jobs: **test** (fmt-check, vet, test+coverage), **lint** (golangci-lint, actionlint, yamllint, license headers, gitleaks, `go mod tidy` committed), **vuln** (`make vulncheck`), **shell** (shellcheck over `tools/`). The lint job checks out at `fetch-depth: 0` — `gitleaks git` on a shallow clone scans one commit and passes vacuously.
 - `test.yaml` — runs `qualify` on push/PR to main.
-- `release.yaml` — on `v*` tag: re-runs `qualify` from scratch, then goreleaser
-  (binaries + checksums + SBOMs, guarded Homebrew cask), then
-  `actions/attest-build-provenance` (keyless SLSA provenance over the archives +
-  checksums; verify with `gh attestation verify <file> --repo thingzio/devradarctl`).
+- `codeql.yaml` — weekly CodeQL via the shared `thingzio/actions` workflow.
+- `verify-release.yaml` — weekly re-verification of the latest release's cosign signature and SLSA provenance. This is devradarctl's analogue of devproof's `keyless.yaml`: devradarctl implements no signing, so there is nothing to sign-and-verify in-process; what is worth checking is that the published release still verifies.
+- `release.yaml` — on a semver tag: re-runs `qualify` from scratch, resolves the
+  pinned tool versions, then delegates build/sign/attest/verify/publish to
+  `thingzio/actions/.github/workflows/release-go.yaml`, pinned by commit SHA.
+- **SLSA Build Level 3.** The signing identity lives in a job of the shared
+  workflow that runs no code from this repository, so goreleaser hooks here
+  cannot reach the OIDC token; Fulcio records `thingzio/actions` as the signer
+  and this repo as the entry point. Consumers verify with `--signer-workflow` —
+  see `RELEASING.md`. Do not move signing back into this repository.
 - Action SHAs are pinned; jobs use least-privilege `permissions` and `persist-credentials: false`.
 - No vendoring — CI relies on the Go module cache (deliberate: go-containerregistry's tree is large).
 
@@ -99,3 +118,14 @@ GoReleaser (`.goreleaser.yaml`): single build, linux+darwin × amd64+arm64,
 `CGO_ENABLED=0 -trimpath`, tar.gz archives, sha256 checksums, per-archive SBOMs,
 draft GitHub release, guarded Homebrew cask into the shared org tap
 (`thingzio/homebrew-tap`; install via `brew install thingzio/tap/devradarctl`).
+
+The release is created as a draft and published only after the shared workflow
+verifies the signature it just produced. Full procedure, consumer verification
+commands, and failure recovery: `RELEASING.md`.
+
+## Project docs
+
+`README.md` (users) · `CONTRIBUTING.md` (how to submit a change, DCO) ·
+`DEVELOPMENT.md` (layout, API contract, make targets) · `RELEASING.md` ·
+`SECURITY.md` (threat boundary, reporting) · `MAINTAINERS.md` ·
+`CODE_OF_CONDUCT.md` · `THIRD_PARTY_NOTICES.md` (generated — `make notices`).

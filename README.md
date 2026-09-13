@@ -224,11 +224,14 @@ source <(devradarctl completion bash)   # zsh|fish|powershell also supported
 | `--debug`        | `DEVRADAR_DEBUG`     | `false`                       | Debug logging (default level is warn)         |
 | `--log-json`     | `DEVRADAR_LOG_JSON`  | `false`                       | Emit logs as JSON                             |
 
-## Development
+## Contributing
 
-Contributing? See [DEVELOPMENT.md](DEVELOPMENT.md) for build, test, and release
-instructions.
+Issues and pull requests are welcome — see [CONTRIBUTING](CONTRIBUTING.md) for
+the development workflow, [DEVELOPMENT](DEVELOPMENT.md) for the project layout
+and API contract, [RELEASING](RELEASING.md) for how releases are cut and
+verified, and [SECURITY](SECURITY.md) to report a vulnerability privately.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[Apache License 2.0](LICENSE). Dependency licenses and notices are reproduced
+in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

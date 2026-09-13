@@ -15,31 +15,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Read Go version
-        id: gover
-        run: echo "go=$(cat .go-version)" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
-          go-version: "${{ steps.gover.outputs.go }}"
+          go-version-file: .go-version
           check-latest: true
           cache-dependency-path: go.sum
 
-      - name: Read syft version
-        id: syftver
-        run: echo "syft=$(yq -r '.security_tools.syft' .settings.yaml)" >> "$GITHUB_OUTPUT"
+      - id: versions
+        uses: ./.github/actions/load-versions
 
       # syft so the `sbom`/`submit --image` smoke paths could run; tests
       # themselves skip when it is absent, but keeping it here matches release.
       # SHA-pinned action (not curl|sh from mutable main) for a verifiable install.
       - name: Install syft
-        uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26  # v0.24.2
         with:
-          syft-version: "${{ steps.syftver.outputs.syft }}"
+          syft-version: "${{ steps.versions.outputs.syft }}"
 
       - name: Format check
         run: make fmt-check
@@ -54,34 +49,81 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Full history: the secret scan below reads the whole commit graph. A
+      # secret committed and then removed is still published -- the object
+      # stays reachable in the history, in every fork, and in every cache --
+      # so a shallow clone would make `gitleaks git` scan one commit and
+      # report "no leaks found", which is worse than not running it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
-      - name: Read versions
-        id: v
-        run: |
-          {
-            echo "go=$(cat .go-version)"
-            echo "golangci=$(yq -r '.linting.golangci_lint' .settings.yaml)"
-          } >> "$GITHUB_OUTPUT"
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
-          go-version: "${{ steps.v.outputs.go }}"
+          go-version-file: .go-version
           check-latest: true
           cache-dependency-path: go.sum
 
+      - id: versions
+        uses: ./.github/actions/load-versions
+
       - name: Lint
-        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
         with:
-          version: "${{ steps.v.outputs.golangci }}"
+          version: "${{ steps.versions.outputs.golangci_lint }}"
+
+      - name: actionlint
+        run: |
+          go install "github.com/rhysd/actionlint/cmd/actionlint@${{ steps.versions.outputs.actionlint }}"
+          actionlint
+
+      - name: yamllint
+        run: |
+          pipx install "yamllint==${{ steps.versions.outputs.yamllint }}"
+          yamllint --strict .
+
+      # A missing license header is caught here rather than at review time.
+      - name: license headers
+        run: make license-check
+
+      - name: secrets
+        run: |
+          go install "github.com/zricethezav/gitleaks/v8@${{ steps.versions.outputs.gitleaks }}"
+          gitleaks dir --no-banner --redact .
+          gitleaks git --no-banner --redact .
+
+      - name: go mod tidy is committed
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+  vuln:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: .go-version
+          check-latest: true
+          cache-dependency-path: go.sum
+
+      # `make vulncheck` rather than govulncheck directly: the Makefile target
+      # holds the pinned version, and running the raw tool here would let CI and
+      # the local gate disagree about what "green" means -- which is the one
+      # thing the gate exists to prevent.
+      - name: govulncheck
+        run: make vulncheck
 
   shell:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 

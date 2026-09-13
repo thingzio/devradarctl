@@ -1,30 +1,100 @@
 version: "2"
 
 run:
-  go: "1.26"
+  go: "1.27"
   timeout: 5m
   tests: true
   modules-download-mode: readonly
+  # Queue behind golangci-lint's machine-wide lock rather than failing with
+  # "parallel golangci-lint is running". Several concurrent worktrees on one
+  # machine otherwise abort each other's runs over a transient lock. Inert in
+  # CI, where each job owns its runner.
+  allow-serial-runners: true
+
+output:
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
+  sort-order:
+    - linter
+    - severity
+    - file
 
 linters:
   enable:
     # Bug detection
-    - bodyclose       # HTTP response body must be closed
-    - copyloopvar     # loop variable capture
-    - errorlint       # error wrapping / comparison
-    - nilerr          # returning nil after an error check
+    - bodyclose
+    - copyloopvar
+    - errorlint
+    - nilerr
+    - nilnil
+    - staticcheck
+
     # Code quality
-    - gocritic        # opinionated checks
+    - asciicheck
+    - dogsled
+    - dupl
+    - exhaustive
+    - funlen
+    - goconst
+    - gocritic
     - govet
     - misspell
+    - nakedret
+    - prealloc
     - revive
-    - unconvert       # unnecessary conversions
-    - unparam         # unused function params
+    - unconvert
+    - unparam
+    - whitespace
+
+    # Security
+    - gosec
+
+    # Context discipline
+    - contextcheck
+    - noctx
+
+    # Dependency management
+    - depguard
+
+    # Testing
+    - tparallel
+
+    # Style
+    - importas
+
   settings:
+    funlen:
+      lines: 200
+      statements: 70
+      ignore-comments: true
+
+    govet:
+      enable:
+        - shadow
+
+    misspell:
+      mode: restricted
+      locale: US
+
+    whitespace:
+      multi-if: true
+      multi-func: true
+
+    dupl:
+      threshold: 200
+
+    goconst:
+      min-occurrences: 3
+      ignore-tests: true
+
     revive:
       rules:
         - name: exported
           disabled: true  # doc comments are conventional, not enforced
+
     errcheck:
       # Terminal/table output writes: a write error to stdout/stderr or the
       # tabwriter is unactionable here (the tabwriter surfaces real errors at
@@ -33,16 +103,68 @@ linters:
         - fmt.Fprint
         - fmt.Fprintf
         - fmt.Fprintln
+
+    depguard:
+      rules:
+        main:
+          list-mode: lax
+          deny:
+            - pkg: io/ioutil
+              desc: "Deprecated since Go 1.16. Use io and os instead."
+            - pkg: math/rand$
+              desc: "Use math/rand/v2, or crypto/rand for security-sensitive code."
+
   exclusions:
     generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      # Tests may be longer / less strict.
-      - path: _test\.go
-        linters:
+      - linters:
+          - contextcheck
+          - dupl
+          - errcheck
+          - funlen
+          - gocognit
+          - goconst
           - gocritic
+          - gocyclo
+          - gosec
+          - noctx
           - unparam
+        path: _test\.go
+      # staticcheck does not know t.Fatal stops execution.
+      - linters:
+          - staticcheck
+        text: "SA5011"
+        path: _test\.go
+      - linters:
+          - prealloc
+        path: _test\.go
+      # shadow flags the `if err := f(); err != nil` idiom, where the check is
+      # in the same statement and nothing can be swallowed. It earns its keep in
+      # production code, where a shadowed err can genuinely be lost; in tests it
+      # is pure noise against code that fails loudly anyway.
+      - linters:
+          - govet
+        text: 'shadow: declaration of "err"'
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
 
 formatters:
   enable:
     - gofmt
     - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$

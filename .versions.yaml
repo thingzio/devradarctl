@@ -1,0 +1,48 @@
+# Single source of truth for every pinned tool version and quality threshold.
+#
+# Local development and CI MUST read from this file. A version that appears
+# only in a Makefile recipe or only in a workflow step is a bug: the two drift,
+# and "works on my machine" becomes unreproducible.
+#
+# The Go toolchain itself is owned by .go-version, not this file, so that
+# actions/setup-go and `go` directive tooling can read it without a YAML parser.
+
+# Build and release tooling.
+build_tools:
+  # renovate: datasource=github-releases depName=goreleaser/goreleaser
+  goreleaser: 'v2.18.1'
+
+# Static analysis and formatting.
+linting:
+  # renovate: datasource=github-releases depName=golangci/golangci-lint
+  golangci_lint: 'v2.13.2'
+  # renovate: datasource=github-releases depName=rhysd/actionlint
+  actionlint: 'v1.7.12'
+  # renovate: datasource=pypi depName=yamllint
+  yamllint: '1.38.0'
+
+# Supply-chain and security scanning.
+#
+# syft is not only a CI tool here: devradarctl shells out to it at runtime, so
+# this pin is both the version CI installs for the `sbom`/`submit --image`
+# smoke paths and the version goreleaser uses to attach release SBOMs.
+security_tools:
+  # renovate: datasource=github-releases depName=anchore/syft
+  syft: 'v1.51.1'
+  # renovate: datasource=go depName=golang.org/x/vuln
+  govulncheck: 'v1.8.0'
+  # renovate: datasource=github-releases depName=gitleaks/gitleaks
+  gitleaks: 'v8.30.1'
+
+# Quality gates. Numbers and durations rather than tool versions, but they
+# belong here for the same reason: a threshold that lives only in a Makefile
+# recipe and a workflow step is a threshold the two will eventually disagree
+# about.
+quality:
+  # The floor `make test-coverage` enforces. Raise it as coverage improves;
+  # never lower it to make a red build green. Actual is 66.8%; the floor sits
+  # just under it so a regression fails rather than being absorbed by slack.
+  coverage_threshold: '65'
+  lint_timeout: '5m'
+  test_timeout: '10m'
+  build_timeout: '10m'

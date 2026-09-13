@@ -1,0 +1,17 @@
+extends: default
+
+ignore:
+  - vendor/
+  - dist/
+  - bin/
+  # Vendored verbatim from the DevRadar service's published OpenAPI document.
+  # spec_sync_test.go compares this file byte-for-byte against the live spec,
+  # so reformatting it to satisfy a linter would make that test fail and, worse,
+  # would mean the "vendored copy" no longer is one.
+  - internal/client/testdata/openapi.yaml
+
+rules:
+  line-length: disable
+  document-start: disable
+  document-end: disable
+  truthy: disable

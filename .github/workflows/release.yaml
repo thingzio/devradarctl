@@ -20,12 +20,12 @@ jobs:
     permissions:
       contents: read
 
-  # .settings.yaml stays authoritative for the tools that build a release.
+  # .versions.yaml stays authoritative for the tools that build a release.
   #
   # Without this the shared workflow falls back to thingzio/actions' own pins,
   # and the versions declared here would describe something that no longer
   # happens: `make snapshot` would build with one goreleaser and the release
-  # with another, and the syft comment in .settings.yaml -- which says outright
+  # with another, and the syft comment in .versions.yaml -- which says outright
   # that it is "the version goreleaser uses to attach release SBOMs" -- would
   # simply be untrue.
   #
@@ -39,16 +39,11 @@ jobs:
       goreleaser: ${{ steps.read.outputs.goreleaser }}
       syft: ${{ steps.read.outputs.syft }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - id: read
-        run: |
-          set -euo pipefail
-          {
-            echo "goreleaser=$(yq -r '.build_tools.goreleaser' .settings.yaml)"
-            echo "syft=$(yq -r '.security_tools.syft' .settings.yaml)"
-          } >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/load-versions
 
   # Building, signing, attesting and publishing all happen in the shared build
   # definition, which changes two things beyond removing steps from here.

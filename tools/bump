@@ -81,6 +81,18 @@ bump_version() {
 		err "Version tag '${new_version}' already exists on remote."
 	fi
 
+	# A tag is the one action here that cannot be taken back: it names bytes
+	# other people will verify against. Running the gate rather than trusting
+	# that someone remembered to is the difference between a checklist and a
+	# guarantee. Set SKIP_QUALIFY=1 only when re-tagging a commit already known
+	# to be green.
+	if [ "${SKIP_QUALIFY:-0}" = "1" ]; then
+		msg "SKIP_QUALIFY=1 set; not running the qualification gate"
+	else
+		msg "Running the qualification gate before tagging"
+		make -C "${REPO_ROOT}" qualify || err "Qualification failed. Nothing was tagged."
+	fi
+
 	msg "Bumping $bump_type version: $current_version → $new_version"
 
 	git tag -s -a "$new_version" -m "Release $new_version"

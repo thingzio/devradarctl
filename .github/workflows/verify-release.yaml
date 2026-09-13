@@ -1,0 +1,119 @@
+name: verify-release
+
+# Re-verifies the published release the way a consumer would.
+#
+# devproof has a `keyless` workflow that signs a throwaway fixture against a
+# live Fulcio and Rekor, because devproof implements keyless signing and that
+# code cannot be exercised in-process. devradarctl signs nothing -- it uploads
+# attestation bundles for the DevRadar service to verify -- so there is no
+# equivalent signing path to test here.
+#
+# What is worth testing on a schedule is the other half: that the release this
+# repository publishes still verifies against the identity RELEASING.md tells
+# people to require. That catches a Sigstore change, an expired or rotated
+# trust root, a release published without a signature, and a shared-workflow
+# change that alters the signer identity -- each of which is discovered here
+# with a week's notice rather than by a consumer, or during a release.
+#
+# Nothing is signed and no identity is minted, so this needs no id-token.
+on:
+  schedule:
+    # Mondays, early UTC -- staggered off the codeql and devproof keyless runs.
+    - cron: '41 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # gh attestation verify reads the repository's attestations.
+      attestations: read
+      id-token: none
+    steps:
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+
+      - name: Verify the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          # The signer is the shared build definition, not this repository.
+          # That is the SLSA Build Level 3 property; verifying without naming it
+          # would accept a signature from any workflow here, which is exactly
+          # what the isolated signing job exists to rule out.
+          SIGNER_REPO: thingzio/actions
+        run: |
+          set -euo pipefail
+
+          tag="$(gh release view --json tagName --jq .tagName)"
+          echo "latest release: ${tag}"
+
+          workdir="$(mktemp -d)"
+          gh release download "$tag" --dir "$workdir" --clobber
+
+          if [ ! -f "${workdir}/checksums.txt.bundle" ]; then
+            # Releases cut before the migration to the shared, signing build
+            # definition carry no bundle. Passing on those is correct; passing
+            # once signing is established would hide a regression, so that case
+            # is separated out and fails.
+            signed_exists=0
+            for t in $(gh release list --limit 100 --json tagName --jq '.[].tagName'); do
+              if gh release view "$t" --json assets --jq '.assets[].name' \
+                | grep -qx 'checksums.txt.bundle'; then
+                signed_exists=1
+                echo "an earlier release (${t}) is signed"
+                break
+              fi
+            done
+            if [ "$signed_exists" -eq 1 ]; then
+              echo "::error::latest release ${tag} carries no checksums.txt.bundle, but an earlier release does -- it was published unsigned"
+              exit 1
+            fi
+            echo "::notice::release ${tag} predates the signed-release migration; nothing to verify yet"
+            exit 0
+          fi
+
+          # .goreleaser.yaml names this checksums.txt so it matches the bundle
+          # that signs it. Globbed rather than hardcoded so that a release cut
+          # before that rename (<= v0.3.1 used devradarctl_checksums.txt) still
+          # verifies rather than silently skipping.
+          checksums="$(find "$workdir" -maxdepth 1 -name '*checksums.txt' -print -quit)"
+          if [ -z "$checksums" ]; then
+            echo "::error::release ${tag} has a signature bundle but no checksum file"
+            exit 1
+          fi
+          echo "verifying $(basename "$checksums")"
+
+          escaped="${SIGNER_REPO//./\\.}"
+          identity="^https://github\\.com/${escaped}/\\.github/workflows/release-go\\.yaml@"
+          echo "requiring signer identity: ${identity}"
+
+          cosign verify-blob "$checksums" \
+            --bundle "${workdir}/checksums.txt.bundle" \
+            --certificate-identity-regexp "${identity}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+          # The signature covers the checksum file; the checksum file commits to
+          # every other artifact by digest. Checking the digests is what turns
+          # one verified signature into a verified release.
+          (cd "$workdir" && sha256sum -c "$(basename "$checksums")")
+
+          # Provenance, naming the shared workflow as the builder. Without
+          # --signer-workflow this accepts provenance from any workflow in this
+          # repository.
+          for archive in "$workdir"/*.tar.gz; do
+            echo "attestation: $(basename "$archive")"
+            gh attestation verify "$archive" \
+              --repo "$GH_REPO" \
+              --signer-workflow "${SIGNER_REPO}/.github/workflows/release-go.yaml"
+          done
+
+          echo "release ${tag} verified"

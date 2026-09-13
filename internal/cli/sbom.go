@@ -1,3 +1,19 @@
+// Copyright 2026 Thingz LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package cli
 
 import (
@@ -70,7 +86,8 @@ func sbomGenerateCmd() *cli.Command {
 // raw bytes plus the digest-pinned reference so callers can reuse both. It does
 // not write output — that is the caller's decision (the `sbom` command writes
 // to a file or stdout; `submit` transmits without printing).
-func generateSBOM(ctx context.Context, image string, opts sbom.Options) (result sbomResult, err error) {
+func generateSBOM(ctx context.Context, image string, opts sbom.Options) (sbomResult, error) {
+	var result sbomResult
 	if err := sbom.EnsureSyft(opts.SyftPath); err != nil {
 		return result, err
 	}
@@ -101,7 +118,10 @@ func writeOutput(path string, b []byte) error {
 		_, err := os.Stdout.Write(b)
 		return err
 	}
-	if err := os.WriteFile(path, b, 0o644); err != nil {
+	// 0644: an SBOM is an inventory meant to be read by other tooling and
+	// people, not a secret. Narrowing it to 0600 would break the common case of
+	// writing one in CI for a later step or a different user to consume.
+	if err := os.WriteFile(path, b, 0o644); err != nil { //nolint:gosec // G306: non-secret output the caller named
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	slog.Debug("wrote SBOM", "path", path, "bytes", len(b))

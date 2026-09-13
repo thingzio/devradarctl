@@ -1,6 +1,6 @@
 module github.com/thingzio/devradarctl
 
-go 1.27
+go 1.27.1
 
 require (
 	github.com/google/go-containerregistry v0.22.1

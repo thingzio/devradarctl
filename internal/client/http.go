@@ -1,3 +1,19 @@
+// Copyright 2026 Thingz LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package client
 
 import (
@@ -27,14 +43,13 @@ const (
 // the response body. When out is non-nil and the response has a body, the body
 // is JSON-decoded into out; a 204 (or empty body) leaves out untouched.
 func (c *Client) do(ctx context.Context, method, path string, q url.Values, body io.Reader, out any) error {
-	_, err := c.doOnce(ctx, method, path, q, body, out)
-	return err
+	return c.doOnce(ctx, method, path, q, body, out)
 }
 
-// doOnce performs a single request attempt. It returns the *APIError (if the
-// status was non-2xx) alongside the error so a retry loop can inspect the
-// status without re-parsing, and returns other errors (transport, read) as-is.
-func (c *Client) doOnce(ctx context.Context, method, path string, q url.Values, body io.Reader, out any) (*APIError, error) {
+// doOnce performs a single request attempt. A non-2xx status is returned as an
+// *APIError, so a retry loop can recover the status with errors.As rather than
+// re-parsing the response; transport and read failures are returned as-is.
+func (c *Client) doOnce(ctx context.Context, method, path string, q url.Values, body io.Reader, out any) error {
 	u := c.baseURL + path
 	if len(q) > 0 {
 		u += "?" + q.Encode()
@@ -42,7 +57,7 @@ func (c *Client) doOnce(ctx context.Context, method, path string, q url.Values, 
 
 	req, err := http.NewRequestWithContext(ctx, method, u, body)
 	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
+		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	if body != nil {
@@ -51,7 +66,7 @@ func (c *Client) doOnce(ctx context.Context, method, path string, q url.Values, 
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request %s %s: %w", method, u, err)
+		return fmt.Errorf("request %s %s: %w", method, u, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -59,24 +74,24 @@ func (c *Client) doOnce(ctx context.Context, method, path string, q url.Values, 
 	// exhaust memory. maxResponseBytes is generous for any DevRadar JSON page.
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
+		return fmt.Errorf("read response: %w", err)
 	}
 	if int64(len(raw)) > maxResponseBytes {
-		return nil, fmt.Errorf("%s %s: response exceeds %d bytes", method, path, maxResponseBytes)
+		return fmt.Errorf("%s %s: response exceeds %d bytes", method, path, maxResponseBytes)
 	}
 	if resp.StatusCode >= 300 {
 		apiErr := newAPIError(resp.StatusCode, raw)
 		apiErr.retryAfter = parseRetryAfter(resp.Header.Get("Retry-After"))
-		return apiErr, apiErr
+		return apiErr
 	}
 
 	if out == nil || len(raw) == 0 {
-		return nil, nil
+		return nil
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
-		return nil, fmt.Errorf("decode response (HTTP %d): %w", resp.StatusCode, err)
+		return fmt.Errorf("decode response (HTTP %d): %w", resp.StatusCode, err)
 	}
-	return nil, nil
+	return nil
 }
 
 // get is an authenticated GET decoding JSON into out, with bounded retries on
@@ -93,12 +108,12 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 			case <-time.After(delay):
 			}
 		}
-		apiErr, err := c.doOnce(ctx, http.MethodGet, path, q, nil, out)
+		err := c.doOnce(ctx, http.MethodGet, path, q, nil, out)
 		if err == nil {
 			return nil
 		}
 		lastErr = err
-		if !isRetryable(apiErr, err) {
+		if !isRetryable(err) {
 			return err
 		}
 	}
@@ -108,14 +123,15 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 // isRetryable reports whether a failed GET should be retried: a transient
 // transport error, or a 5xx / 429 status. A context cancellation is not
 // retryable.
-func isRetryable(apiErr *APIError, err error) bool {
+func isRetryable(err error) bool {
 	if err == nil {
 		return false
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
-	if apiErr != nil {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
 		return apiErr.StatusCode >= 500 || apiErr.StatusCode == http.StatusTooManyRequests
 	}
 	// No APIError → transport/read error → transient.
@@ -132,7 +148,9 @@ func backoffDelay(attempt int, lastErr error) time.Duration {
 	}
 	// Exponential: base * 2^(attempt-1), capped, with full jitter in [0, d].
 	d := min(baseBackoff<<(attempt-1), maxBackoff)
-	return time.Duration(rand.Int64N(int64(d) + 1))
+	// Jitter spreads retries across clients; it is not a security boundary, so
+	// a PRNG is the right tool and crypto/rand would only add cost.
+	return time.Duration(rand.Int64N(int64(d) + 1)) //nolint:gosec // G404: jitter, not a secret
 }
 
 // parseRetryAfter parses a Retry-After header value, supporting the
