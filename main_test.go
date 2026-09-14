@@ -19,11 +19,67 @@ package main
 import (
 	"bytes"
 	"errors"
+	"runtime/debug"
 	"strings"
 	"testing"
 
 	"github.com/urfave/cli/v3"
 )
+
+func TestResolveBuildInfo_BackfillsFromModuleVersion(t *testing.T) {
+	bi := &debug.BuildInfo{
+		Main: debug.Module{Version: "v0.1.2"},
+		Settings: []debug.BuildSetting{
+			{Key: "vcs.revision", Value: "77eeb7391a1c0d2e5f6a7b8c9d0e1f2a3b4c5d6e"},
+			{Key: "vcs.time", Value: "2026-09-13T14:40:23Z"},
+		},
+	}
+	v, c, d := resolveBuildInfo(devVersion, devCommit, devDate, bi)
+	if v != "v0.1.2" {
+		t.Errorf("version = %q, want v0.1.2", v)
+	}
+	if c != "77eeb73" {
+		t.Errorf("commit = %q, want short revision 77eeb73", c)
+	}
+	if d != "2026-09-13T14:40:23Z" {
+		t.Errorf("date = %q, want vcs.time", d)
+	}
+}
+
+func TestResolveBuildInfo_KeepsLdflagValues(t *testing.T) {
+	bi := &debug.BuildInfo{
+		Main:     debug.Module{Version: "v0.1.2"},
+		Settings: []debug.BuildSetting{{Key: "vcs.revision", Value: "deadbeefdeadbeef"}},
+	}
+	v, c, d := resolveBuildInfo("v0.4.0", "77eeb73", "2026-09-13T14:40:23Z", bi)
+	if v != "v0.4.0" || c != "77eeb73" || d != "2026-09-13T14:40:23Z" {
+		t.Errorf("ldflag values overwritten: %q %q %q", v, c, d)
+	}
+}
+
+func TestResolveBuildInfo_MarksDirtyTree(t *testing.T) {
+	bi := &debug.BuildInfo{
+		Main: debug.Module{Version: "(devel)"},
+		Settings: []debug.BuildSetting{
+			{Key: "vcs.revision", Value: "77eeb7391a1c0d2e"},
+			{Key: "vcs.modified", Value: "true"},
+		},
+	}
+	v, c, _ := resolveBuildInfo(devVersion, devCommit, devDate, bi)
+	if v != devVersion {
+		t.Errorf("version = %q, want %q for a (devel) module", v, devVersion)
+	}
+	if c != "77eeb73-dirty" {
+		t.Errorf("commit = %q, want 77eeb73-dirty", c)
+	}
+}
+
+func TestResolveBuildInfo_NoBuildInfo(t *testing.T) {
+	v, c, d := resolveBuildInfo(devVersion, devCommit, devDate, nil)
+	if v != devVersion || c != devCommit || d != devDate {
+		t.Errorf("defaults changed without build info: %q %q %q", v, c, d)
+	}
+}
 
 func TestExitCode_Nil(t *testing.T) {
 	var buf bytes.Buffer

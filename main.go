@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 
 	"github.com/urfave/cli/v3"
@@ -32,11 +33,18 @@ import (
 	devcli "github.com/thingzio/devradarctl/internal/cli"
 )
 
-// Injected via -ldflags at build time.
+// Placeholders for a build that carried no -ldflags.
+const (
+	devVersion = "dev"
+	devCommit  = "none"
+	devDate    = "unknown"
+)
+
+// Injected via -ldflags at build time; see resolveBuildInfo for the fallback.
 var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	version = devVersion
+	commit  = devCommit
+	date    = devDate
 )
 
 func main() {
@@ -47,8 +55,65 @@ func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	err := devcli.New(version, commit, date).Run(ctx, os.Args)
+	bi, _ := debug.ReadBuildInfo()
+	v, c, d := resolveBuildInfo(version, commit, date, bi)
+
+	err := devcli.New(v, c, d).Run(ctx, os.Args)
 	return exitCode(os.Stderr, err)
+}
+
+// resolveBuildInfo backfills any placeholder left by a build that carried no
+// -ldflags from the binary's embedded build info. `go install <module>@<ver>`
+// -- a documented install path -- sets no ldflags, so without this the CLI
+// reports "dev (commit: none, date: unknown)" for a real tagged release.
+// Values that were injected are never overwritten: the ldflags are the more
+// precise source (goreleaser stamps the release tag, the module version can be
+// a pseudo-version).
+func resolveBuildInfo(v, c, d string, bi *debug.BuildInfo) (string, string, string) {
+	if bi == nil {
+		return v, c, d
+	}
+
+	// A local `go build` reports "(devel)", which is less informative than "dev".
+	if v == devVersion && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		v = bi.Main.Version
+	}
+
+	var revision, buildTime string
+	var dirty bool
+	for _, s := range bi.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			revision = s.Value
+		case "vcs.time":
+			buildTime = s.Value
+		case "vcs.modified":
+			dirty = s.Value == "true"
+		}
+	}
+
+	if c == devCommit && revision != "" {
+		c = shortCommit(revision)
+		if dirty {
+			c += "-dirty"
+		}
+	}
+	if d == devDate && buildTime != "" {
+		d = buildTime
+	}
+
+	return v, c, d
+}
+
+// shortCommit abbreviates a revision to the 7 characters `git rev-parse
+// --short` and goreleaser's .ShortCommit produce, so both build paths render
+// the same way.
+func shortCommit(revision string) string {
+	const short = 7
+	if len(revision) <= short {
+		return revision
+	}
+	return revision[:short]
 }
 
 // exitCode maps a Run error to a process exit code, printing to w. It is split
