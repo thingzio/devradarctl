@@ -6,7 +6,7 @@ require (
 	github.com/google/go-containerregistry v0.22.1
 	github.com/pb33f/libopenapi v0.38.7
 	github.com/pb33f/libopenapi-validator v0.14.0
-	github.com/urfave/cli/v3 v3.11.0
+	github.com/urfave/cli/v3 v3.13.0
 )
 
 require (
