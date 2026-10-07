@@ -4,9 +4,9 @@ go 1.27.1
 
 require (
 	github.com/google/go-containerregistry v0.22.1
-	github.com/pb33f/libopenapi v0.38.7
-	github.com/pb33f/libopenapi-validator v0.14.0
-	github.com/urfave/cli/v3 v3.13.0
+	github.com/pb33f/libopenapi v0.41.2
+	github.com/pb33f/libopenapi-validator v0.15.1
+	github.com/urfave/cli/v3 v3.14.0
 )
 
 require (
@@ -20,11 +20,11 @@ require (
 	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/pb33f/jsonpath v0.8.2 // indirect
-	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
+	github.com/pb33f/go-yaml v0.1.1 // indirect
+	github.com/pb33f/jsonpath v0.8.4 // indirect
+	github.com/pb33f/ordered-map/v2 v2.3.2 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/sirupsen/logrus v1.10.2 // indirect
-	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
 	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
